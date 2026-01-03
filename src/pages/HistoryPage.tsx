@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import Modal from '../components/Modal';
-import { clearWrites, loadWrites, removeWrite, type WriteDraft } from '../lib/storage';
+import { clearWrites, loadWrites, removeWriteDraft, type WriteDraft } from '../lib/storage';
 import { formatWhen } from '../lib/time';
 
 export default function HistoryPage() {
@@ -55,7 +55,7 @@ export default function HistoryPage() {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    removeWrite(w.id);
+                    removeWriteDraft(w.id);
                     if (selected?.id === w.id) setSelected(null);
                     setRefresh((x) => x + 1);
                   }}

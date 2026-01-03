@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import Modal from '../components/Modal';
 import { uid } from '../lib/id';
-import { addWrite, type WriteDraft } from '../lib/storage';
+import { addWriteDraft, type WriteDraft } from '../lib/storage';
 
 export default function WritePage() {
   const [title, setTitle] = useState('');
@@ -99,7 +99,7 @@ export default function WritePage() {
               disabled={!preview || !consented}
               onClick={() => {
                 if (!preview) return;
-                addWrite(preview);
+                addWriteDraft(preview);
                 setOpen(false);
                 setConsented(false);
                 setTitle('');
