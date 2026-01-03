@@ -1,6 +1,5 @@
 import { useSyncExternalStore } from "react";
 import { WorldId } from "../modes";
-import { readJson, writeJson } from "../../lib/storage";
 
 export type UiPrefs = {
   iconOrder: WorldId[];
@@ -13,11 +12,46 @@ const DEFAULT_PREFS: UiPrefs = {
 };
 
 let _prefs: UiPrefs = load();
-
 const _listeners = new Set<() => void>();
 
 function emit() {
   for (const fn of _listeners) fn();
+}
+
+function safeGetItem(key: string): string | null {
+  try {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetItem(key: string, value: string) {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(key, value);
+  } catch {
+    // ignore
+  }
+}
+
+function readJson<T>(key: string): T | null {
+  const raw = safeGetItem(key);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function writeJson(key: string, value: unknown) {
+  try {
+    safeSetItem(key, JSON.stringify(value));
+  } catch {
+    // ignore
+  }
 }
 
 function load(): UiPrefs {

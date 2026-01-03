@@ -1,34 +1,30 @@
 import { useEffect, useMemo } from "react";
-import { WorldId, worldCatalog } from "../app/modes";
+import { WorldId } from "../app/modes";
 import { setIconOrder, useUiPrefs } from "../app/stores/UiPrefsStore";
 
-function isComingSoon(meta: unknown): boolean {
-  const m = meta as any;
-  return Boolean(m?.comingSoon ?? m?.disabled ?? (m?.available === false) ?? (m?.status === "comingSoon"));
-}
+type WorldIcon = {
+  id: WorldId;
+  label: string;
+  icon: string;
+  disabled?: boolean; // dim + no click
+};
+
+const worlds: WorldIcon[] = [
+  { id: "game", label: "Game", icon: "🎮" },
+  { id: "not_sure", label: "Not sure", icon: "❓" },
+  { id: "planner", label: "Planner", icon: "🗓️" },
+  { id: "writing", label: "Writing", icon: "✍️" },
+  { id: "video", label: "Video", icon: "🎥", disabled: true },
+  { id: "app", label: "App / Tool", icon: "🛠️", disabled: true },
+];
 
 function swap(arr: WorldId[], a: number, b: number): WorldId[] {
   if (a < 0 || b < 0 || a >= arr.length || b >= arr.length) return arr;
   const next = arr.slice();
-  const tmp = next[a];
+  const t = next[a];
   next[a] = next[b];
-  next[b] = tmp;
+  next[b] = t;
   return next;
-}
-
-function renderIcon(meta: any) {
-  const icon = meta?.icon ?? meta?.emoji;
-  const iconSrc = meta?.iconSrc ?? meta?.iconUrl ?? meta?.iconPath;
-
-  if (typeof iconSrc === "string" && iconSrc.length > 0) {
-    return <img src={iconSrc} alt="" className="w-8 h-8" draggable={false} />;
-  }
-
-  if (typeof icon === "string" && icon.length > 0) {
-    return <span className="leading-none">{icon}</span>;
-  }
-
-  return <span className="leading-none">⬚</span>;
 }
 
 export default function WorldIconGrid({
@@ -38,14 +34,19 @@ export default function WorldIconGrid({
 }) {
   const prefs = useUiPrefs();
 
-  const allIds = useMemo(() => Object.keys(worldCatalog) as WorldId[], []);
+  const worldIds = useMemo(() => worlds.map((w) => w.id), []);
+  const byId = useMemo(() => {
+    const m = new Map<WorldId, WorldIcon>();
+    for (const w of worlds) m.set(w.id, w);
+    return m;
+  }, []);
 
   const ordered = useMemo(() => {
-    const available = new Set(allIds);
+    const available = new Set(worldIds);
     const fromPrefs = (prefs.iconOrder ?? []).filter((id) => available.has(id));
-    const missing = allIds.filter((id) => !fromPrefs.includes(id));
+    const missing = worldIds.filter((id) => !fromPrefs.includes(id));
     return [...fromPrefs, ...missing];
-  }, [prefs.iconOrder, allIds]);
+  }, [prefs.iconOrder, worldIds]);
 
   useEffect(() => {
     const current = prefs.iconOrder ?? [];
@@ -67,49 +68,44 @@ export default function WorldIconGrid({
           justifyItems: "center",
         }}
       >
-        {ordered.map((id) => {
-          const meta: any = (worldCatalog as any)[id];
-          if (!meta) return null;
+        {ordered.map((id, idx) => {
+          const w = byId.get(id);
+          if (!w) return null;
 
-          const label: string = meta.label ?? meta.title ?? id;
-          const comingSoon = isComingSoon(meta);
-
-          const idx = ordered.indexOf(id);
+          const disabled = Boolean(w.disabled);
           const canLeft = idx > 0;
           const canRight = idx < ordered.length - 1;
 
-          const moveLeft = (e: React.MouseEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!canLeft) return;
-            setIconOrder(swap(ordered, idx, idx - 1));
-          };
-
-          const moveRight = (e: React.MouseEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (!canRight) return;
-            setIconOrder(swap(ordered, idx, idx + 1));
-          };
-
           return (
-            <button
-              key={id}
+            <div
+              key={w.id}
               className={[
                 "flex flex-col items-center text-center select-none w-[72px] relative",
-                comingSoon ? "opacity-50 cursor-not-allowed" : "",
+                disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
               ].join(" ")}
+              role={disabled ? undefined : "button"}
+              tabIndex={disabled ? -1 : 0}
+              aria-label={w.label}
               onClick={() => {
-                if (!comingSoon) onSelect(id);
+                if (!disabled) onSelect(w.id);
               }}
-              aria-label={label}
-              disabled={comingSoon}
+              onKeyDown={(e) => {
+                if (disabled) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onSelect(w.id);
+                }
+              }}
             >
               <div className="absolute -top-2 -left-2 flex gap-1">
                 <button
                   type="button"
                   className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/15 bg-white/5 text-white/80 disabled:opacity-30"
-                  onClick={moveLeft}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!canLeft) return;
+                    setIconOrder(swap(ordered, idx, idx - 1));
+                  }}
                   disabled={!canLeft}
                   aria-label="Move left"
                 >
@@ -118,7 +114,11 @@ export default function WorldIconGrid({
                 <button
                   type="button"
                   className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/15 bg-white/5 text-white/80 disabled:opacity-30"
-                  onClick={moveRight}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!canRight) return;
+                    setIconOrder(swap(ordered, idx, idx + 1));
+                  }}
                   disabled={!canRight}
                   aria-label="Move right"
                 >
@@ -127,17 +127,17 @@ export default function WorldIconGrid({
               </div>
 
               <div className="w-16 h-16 rounded-2xl border border-white/15 bg-white/5 flex items-center justify-center text-2xl">
-                {renderIcon(meta)}
+                <span className="leading-none">{w.icon}</span>
               </div>
 
               <div className="mt-2 text-[11px] font-medium leading-tight h-7 flex items-start justify-center text-white">
-                {label}
+                {w.label}
               </div>
 
               <div className="text-[10px] opacity-60 h-3 leading-tight text-white">
-                {comingSoon ? "Coming soon" : ""}
+                {disabled ? "Coming soon" : ""}
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
