@@ -29,8 +29,10 @@ function WorldIcon({ id }: { id: WorldId }) {
 
 export default function WorldIconGrid({
   onSelect,
+  editMode = false,
 }: {
   onSelect: (id: WorldId) => void;
+  editMode?: boolean;
 }) {
   const prefs = useUiPrefs();
 
@@ -66,6 +68,7 @@ export default function WorldIconGrid({
         {ordered.map((id, idx) => {
           const meta = WORLD_CATALOG[id];
           const disabled = !meta.enabled;
+
           const canLeft = idx > 0;
           const canRight = idx < ordered.length - 1;
 
@@ -76,48 +79,52 @@ export default function WorldIconGrid({
                 "flex flex-col items-center text-center select-none w-[72px] relative",
                 disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
               ].join(" ")}
-              role={disabled ? undefined : "button"}
-              tabIndex={disabled ? -1 : 0}
+              role={disabled || editMode ? undefined : "button"}
+              tabIndex={disabled || editMode ? -1 : 0}
               aria-label={meta.label}
               onClick={() => {
-                if (!disabled) onSelect(id);
+                if (disabled) return;
+                if (editMode) return;
+                onSelect(id);
               }}
               onKeyDown={(e) => {
-                if (disabled) return;
+                if (disabled || editMode) return;
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   onSelect(id);
                 }
               }}
             >
-              <div className="absolute -top-2 -left-2 flex gap-1">
-                <button
-                  type="button"
-                  className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/15 bg-white/5 text-white/80 disabled:opacity-30"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!canLeft) return;
-                    setIconOrder(swap(ordered, idx, idx - 1));
-                  }}
-                  disabled={!canLeft}
-                  aria-label="Move left"
-                >
-                  ◀
-                </button>
-                <button
-                  type="button"
-                  className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/15 bg-white/5 text-white/80 disabled:opacity-30"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!canRight) return;
-                    setIconOrder(swap(ordered, idx, idx + 1));
-                  }}
-                  disabled={!canRight}
-                  aria-label="Move right"
-                >
-                  ▶
-                </button>
-              </div>
+              {editMode && (
+                <div className="absolute -top-2 -left-2 flex gap-1">
+                  <button
+                    type="button"
+                    className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/15 bg-white/5 text-white/80 disabled:opacity-30"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!canLeft) return;
+                      setIconOrder(swap(ordered, idx, idx - 1));
+                    }}
+                    disabled={!canLeft}
+                    aria-label="Move left"
+                  >
+                    ◀
+                  </button>
+                  <button
+                    type="button"
+                    className="text-[10px] px-1.5 py-0.5 rounded-md border border-white/15 bg-white/5 text-white/80 disabled:opacity-30"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!canRight) return;
+                      setIconOrder(swap(ordered, idx, idx + 1));
+                    }}
+                    disabled={!canRight}
+                    aria-label="Move right"
+                  >
+                    ▶
+                  </button>
+                </div>
+              )}
 
               <div className="w-16 h-16 rounded-2xl border border-white/15 bg-white/5 flex items-center justify-center text-2xl">
                 <WorldIcon id={id} />
