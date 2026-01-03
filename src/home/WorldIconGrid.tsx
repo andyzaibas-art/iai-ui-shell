@@ -1,22 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { WorldId } from "../app/modes";
+import { WORLD_CATALOG, WORLD_DEFAULT_ORDER } from "../app/worldCatalog";
 import { setIconOrder, useUiPrefs } from "../app/stores/UiPrefsStore";
-
-type WorldIcon = {
-  id: WorldId;
-  label: string;
-  icon: string;
-  disabled?: boolean; // dim + no click
-};
-
-const worlds: WorldIcon[] = [
-  { id: "game", label: "Game", icon: "🎮" },
-  { id: "not_sure", label: "Not sure", icon: "❓" },
-  { id: "planner", label: "Planner", icon: "🗓️" },
-  { id: "writing", label: "Writing", icon: "✍️" },
-  { id: "video", label: "Video", icon: "🎥", disabled: true },
-  { id: "app", label: "App / Tool", icon: "🛠️", disabled: true },
-];
 
 function swap(arr: WorldId[], a: number, b: number): WorldId[] {
   if (a < 0 || b < 0 || a >= arr.length || b >= arr.length) return arr;
@@ -27,6 +12,21 @@ function swap(arr: WorldId[], a: number, b: number): WorldId[] {
   return next;
 }
 
+function WorldIcon({ id }: { id: WorldId }) {
+  const meta = WORLD_CATALOG[id];
+  if (meta.iconSrc) {
+    return (
+      <img
+        src={meta.iconSrc}
+        alt=""
+        className="w-9 h-9 opacity-90"
+        draggable={false}
+      />
+    );
+  }
+  return <span className="leading-none">{meta.iconText ?? "⬚"}</span>;
+}
+
 export default function WorldIconGrid({
   onSelect,
 }: {
@@ -34,12 +34,7 @@ export default function WorldIconGrid({
 }) {
   const prefs = useUiPrefs();
 
-  const worldIds = useMemo(() => worlds.map((w) => w.id), []);
-  const byId = useMemo(() => {
-    const m = new Map<WorldId, WorldIcon>();
-    for (const w of worlds) m.set(w.id, w);
-    return m;
-  }, []);
+  const worldIds = WORLD_DEFAULT_ORDER;
 
   const ordered = useMemo(() => {
     const available = new Set(worldIds);
@@ -69,31 +64,29 @@ export default function WorldIconGrid({
         }}
       >
         {ordered.map((id, idx) => {
-          const w = byId.get(id);
-          if (!w) return null;
-
-          const disabled = Boolean(w.disabled);
+          const meta = WORLD_CATALOG[id];
+          const disabled = !meta.enabled;
           const canLeft = idx > 0;
           const canRight = idx < ordered.length - 1;
 
           return (
             <div
-              key={w.id}
+              key={id}
               className={[
                 "flex flex-col items-center text-center select-none w-[72px] relative",
                 disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
               ].join(" ")}
               role={disabled ? undefined : "button"}
               tabIndex={disabled ? -1 : 0}
-              aria-label={w.label}
+              aria-label={meta.label}
               onClick={() => {
-                if (!disabled) onSelect(w.id);
+                if (!disabled) onSelect(id);
               }}
               onKeyDown={(e) => {
                 if (disabled) return;
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  onSelect(w.id);
+                  onSelect(id);
                 }
               }}
             >
@@ -127,11 +120,11 @@ export default function WorldIconGrid({
               </div>
 
               <div className="w-16 h-16 rounded-2xl border border-white/15 bg-white/5 flex items-center justify-center text-2xl">
-                <span className="leading-none">{w.icon}</span>
+                <WorldIcon id={id} />
               </div>
 
               <div className="mt-2 text-[11px] font-medium leading-tight h-7 flex items-start justify-center text-white">
-                {w.label}
+                {meta.label}
               </div>
 
               <div className="text-[10px] opacity-60 h-3 leading-tight text-white">
