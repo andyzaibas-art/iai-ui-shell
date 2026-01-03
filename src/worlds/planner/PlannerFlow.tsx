@@ -1,9 +1,10 @@
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   PlannerCategory,
   PlannerInputMode,
   PlannerState,
   PlannerVariant,
+  PlannerTaskStatus,
   buildPlan,
   formatHm,
   resizeBlockMinutes,
@@ -17,7 +18,7 @@ function Btn({
   disabled,
   active,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   onClick: () => void;
   disabled?: boolean;
   active?: boolean;
@@ -49,6 +50,10 @@ function endOfWeek(d: Date) {
   return x;
 }
 
+function toggleDone(s: PlannerTaskStatus): PlannerTaskStatus {
+  return s === "done" ? "planned" : "done";
+}
+
 export default function PlannerFlow({
   value,
   onChange,
@@ -66,7 +71,7 @@ export default function PlannerFlow({
   const timeBudgetMinutes = st.timeBudgetMinutes;
 
   const deadlineType = st.deadlineType ?? "unknown";
-  const hasDeadline = Boolean(st.deadlineDate) || deadlineType !== "unknown";
+  const hasDeadline = deadlineType !== "unknown";
   const canNextDeadline = !hasDeadline || Boolean(st.deadlineDate);
 
   const canGoNextFromInput = useMemo(() => {
@@ -194,7 +199,7 @@ export default function PlannerFlow({
           </Btn>
 
           <Btn
-            active={deadlineType === "unknown" && !st.deadlineDate}
+            active={deadlineType === "unknown"}
             onClick={() =>
               set({
                 ...st,
@@ -408,12 +413,10 @@ export default function PlannerFlow({
     (activeKey === "B" ? st.variants?.B : st.variants?.A) ?? { blocks: [], tasks: [] };
 
   function setActiveVariant(nextVar: PlannerVariant) {
-    const nextVariants = {
-      ...(st.variants ?? {}),
-      [activeKey]: nextVar,
-      active: activeKey,
-    } as PlannerState["variants"];
-    set({ ...st, variants: nextVariants });
+    set({
+      ...st,
+      variants: { ...(st.variants ?? {}), [activeKey]: nextVar, active: activeKey } as PlannerState["variants"],
+    });
   }
 
   return (
@@ -493,7 +496,7 @@ export default function PlannerFlow({
                 className="rounded-xl border border-white/15 bg-black/30 px-3 py-2"
                 onClick={() => {
                   const updatedTasks = active.tasks.map((x) =>
-                    x.id === t.id ? { ...x, status: x.status === "done" ? "planned" : "done" } : x
+                    x.id === t.id ? { ...x, status: toggleDone(x.status) } : x
                   );
                   setActiveVariant({ ...active, tasks: updatedTasks });
                 }}
