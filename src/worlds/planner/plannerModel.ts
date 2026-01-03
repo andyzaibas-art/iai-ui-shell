@@ -41,8 +41,14 @@ export type PlannerState = {
   taskListText?: string;
 
   deadlineType?: PlannerDeadlineType;
+
+  // Custom deadline inputs
   deadlineDate?: string; // YYYY-MM-DD
+  deadlineTime?: string; // HH:MM
+
+  // Custom time budget
   timeBudgetMinutes?: number;
+
   category?: PlannerCategory;
 
   variants?: {
@@ -62,7 +68,10 @@ export function genId(prefix: string) {
     .slice(2, 8)}`;
 }
 
-export function splitTasksFromText(inputMode: PlannerInputMode, text: string): string[] {
+export function splitTasksFromText(
+  inputMode: PlannerInputMode,
+  text: string
+): string[] {
   const cleaned = (text ?? "").trim();
   if (!cleaned) return [];
   if (inputMode === "task_list") {
@@ -77,7 +86,6 @@ export function splitTasksFromText(inputMode: PlannerInputMode, text: string): s
 }
 
 function toLocalIso(d: Date) {
-  // Local ISO without timezone "Z"
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
     d.getHours()
@@ -85,7 +93,6 @@ function toLocalIso(d: Date) {
 }
 
 export function formatHm(isoLocal: string) {
-  // isoLocal like 2025-12-30T18:15:00
   const hm = isoLocal.split("T")[1]?.slice(0, 5) ?? "";
   return hm;
 }
@@ -104,7 +111,8 @@ export function buildPlan(params: {
   }));
 
   const budget = params.timeBudgetMinutes ?? 60;
-  const perTask = tasks.length > 0 ? Math.max(15, Math.floor(budget / tasks.length)) : 30;
+  const perTask =
+    tasks.length > 0 ? Math.max(15, Math.floor(budget / tasks.length)) : 30;
 
   // Start at next 15-minute slot
   const start = new Date();
@@ -118,7 +126,6 @@ export function buildPlan(params: {
   let cursor = new Date(start);
 
   if (tasks.length === 0) {
-    // fallback single block
     const end = new Date(cursor);
     end.setMinutes(end.getMinutes() + budget);
     blocks.push({
@@ -149,7 +156,6 @@ export function buildPlan(params: {
       task.scheduledEnd = eIso;
 
       cursor = new Date(end);
-      // add 5 min buffer
       cursor.setMinutes(cursor.getMinutes() + 5);
     }
   }
@@ -174,3 +180,4 @@ export function resizeBlockMinutes(block: PlannerBlock, deltaMinutes: number): P
   }
   return { ...block, end: toLocalIso(end) };
 }
+

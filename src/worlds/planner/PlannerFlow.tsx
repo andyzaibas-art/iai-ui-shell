@@ -21,13 +21,26 @@ function Btn({
 }) {
   return (
     <button
-      className="rounded-xl border px-4 py-3 text-left disabled:opacity-50"
+      className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-left disabled:opacity-50"
       onClick={onClick}
       disabled={disabled}
     >
       {children}
     </button>
   );
+}
+
+function dateStr(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function endOfWeek(d: Date) {
+  const x = new Date(d);
+  const day = x.getDay(); // 0 Sun
+  const delta = day === 0 ? 7 : 7 - day;
+  x.setDate(x.getDate() + delta);
+  return x;
 }
 
 export default function PlannerFlow({
@@ -95,7 +108,7 @@ export default function PlannerFlow({
         </div>
 
         <textarea
-          className="w-full rounded-2xl border p-3 min-h-[120px]"
+          className="w-full rounded-2xl border border-white/15 bg-white/5 p-3 min-h-[120px] text-white"
           value={inputText}
           onChange={(e) => {
             const v = e.target.value;
@@ -109,11 +122,11 @@ export default function PlannerFlow({
         />
 
         <div className="flex gap-2">
-          <button className="rounded-xl border px-4 py-2" onClick={prev}>
+          <button className="rounded-xl border border-white/15 bg-white/5 px-4 py-2" onClick={prev}>
             Back
           </button>
           <button
-            className="rounded-xl border px-4 py-2"
+            className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 disabled:opacity-50"
             onClick={next}
             disabled={!canGoNextFromInput}
           >
@@ -125,30 +138,110 @@ export default function PlannerFlow({
   }
 
   if (st.stepIndex === 3) {
+    const hasDeadline = st.deadlineType && st.deadlineType !== "unknown";
+    const canNext = !hasDeadline || Boolean(st.deadlineDate);
+
     return (
       <div className="space-y-3">
         <div className="text-lg font-semibold">When is the deadline?</div>
 
-        <Btn onClick={() => set({ ...st, deadlineType: "today" })}>Today</Btn>
-        <Btn onClick={() => set({ ...st, deadlineType: "tomorrow" })}>Tomorrow</Btn>
-        <Btn onClick={() => set({ ...st, deadlineType: "this_week" })}>This week</Btn>
-        <Btn onClick={() => set({ ...st, deadlineType: "date" })}>Pick a date</Btn>
+        <Btn
+          onClick={() => {
+            const d = new Date();
+            set({
+              ...st,
+              deadlineType: "today",
+              deadlineDate: dateStr(d),
+              deadlineTime: st.deadlineTime ?? "17:00",
+            });
+          }}
+        >
+          Today
+        </Btn>
+
+        <Btn
+          onClick={() => {
+            const d = new Date();
+            d.setDate(d.getDate() + 1);
+            set({
+              ...st,
+              deadlineType: "tomorrow",
+              deadlineDate: dateStr(d),
+              deadlineTime: st.deadlineTime ?? "17:00",
+            });
+          }}
+        >
+          Tomorrow
+        </Btn>
+
+        <Btn
+          onClick={() => {
+            const d = endOfWeek(new Date());
+            set({
+              ...st,
+              deadlineType: "this_week",
+              deadlineDate: dateStr(d),
+              deadlineTime: st.deadlineTime ?? "17:00",
+            });
+          }}
+        >
+          This week
+        </Btn>
+
+        <Btn
+          onClick={() => {
+            const d = new Date();
+            set({
+              ...st,
+              deadlineType: "date",
+              deadlineDate: st.deadlineDate ?? dateStr(d),
+              deadlineTime: st.deadlineTime ?? "17:00",
+            });
+          }}
+        >
+          Pick a date
+        </Btn>
+
         <Btn onClick={() => set({ ...st, deadlineType: "unknown" })}>I don't know</Btn>
 
-        {st.deadlineType === "date" && (
-          <input
-            className="w-full rounded-2xl border p-3"
-            type="date"
-            value={st.deadlineDate ?? ""}
-            onChange={(e) => set({ ...st, deadlineDate: e.target.value })}
-          />
+        {hasDeadline && (
+          <div className="rounded-2xl border border-white/15 bg-white/5 p-4 space-y-2">
+            <div className="text-sm font-semibold">Custom deadline</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <div className="text-xs opacity-70">Date</div>
+                <input
+                  className="w-full rounded-xl border border-white/15 bg-black/30 p-3 text-white"
+                  type="date"
+                  value={st.deadlineDate ?? ""}
+                  onChange={(e) => set({ ...st, deadlineDate: e.target.value })}
+                />
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs opacity-70">Time</div>
+                <input
+                  className="w-full rounded-xl border border-white/15 bg-black/30 p-3 text-white"
+                  type="time"
+                  value={st.deadlineTime ?? ""}
+                  onChange={(e) => set({ ...st, deadlineTime: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="text-xs opacity-60">
+              If you don’t care about time, leave it empty.
+            </div>
+          </div>
         )}
 
         <div className="flex gap-2">
-          <button className="rounded-xl border px-4 py-2" onClick={prev}>
+          <button className="rounded-xl border border-white/15 bg-white/5 px-4 py-2" onClick={prev}>
             Back
           </button>
-          <button className="rounded-xl border px-4 py-2" onClick={next}>
+          <button
+            className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 disabled:opacity-50"
+            onClick={next}
+            disabled={!canNext}
+          >
             Next
           </button>
         </div>
@@ -167,11 +260,34 @@ export default function PlannerFlow({
         <Btn onClick={() => set({ ...st, timeBudgetMinutes: 240 })}>4 hours</Btn>
         <Btn onClick={() => set({ ...st, timeBudgetMinutes: undefined })}>I don't know</Btn>
 
+        <div className="rounded-2xl border border-white/15 bg-white/5 p-4 space-y-2">
+          <div className="text-sm font-semibold">Custom time</div>
+          <div className="text-xs opacity-70">Minutes (example: 75)</div>
+          <input
+            className="w-full rounded-xl border border-white/15 bg-black/30 p-3 text-white"
+            type="number"
+            min={5}
+            step={5}
+            value={st.timeBudgetMinutes ?? ""}
+            onChange={(e) => {
+              const raw = e.target.value;
+              if (raw.trim() === "") {
+                set({ ...st, timeBudgetMinutes: undefined });
+                return;
+              }
+              const n = Number(raw);
+              if (!Number.isFinite(n)) return;
+              set({ ...st, timeBudgetMinutes: Math.max(5, Math.round(n)) });
+            }}
+            placeholder="60"
+          />
+        </div>
+
         <div className="flex gap-2">
-          <button className="rounded-xl border px-4 py-2" onClick={prev}>
+          <button className="rounded-xl border border-white/15 bg-white/5 px-4 py-2" onClick={prev}>
             Back
           </button>
-          <button className="rounded-xl border px-4 py-2" onClick={next}>
+          <button className="rounded-xl border border-white/15 bg-white/5 px-4 py-2" onClick={next}>
             Next
           </button>
         </div>
@@ -190,11 +306,11 @@ export default function PlannerFlow({
         <Btn onClick={() => set({ ...st, category: "unknown" })}>Not sure</Btn>
 
         <div className="flex gap-2">
-          <button className="rounded-xl border px-4 py-2" onClick={prev}>
+          <button className="rounded-xl border border-white/15 bg-white/5 px-4 py-2" onClick={prev}>
             Back
           </button>
           <button
-            className="rounded-xl border px-4 py-2"
+            className="rounded-xl border border-white/15 bg-white/5 px-4 py-2"
             onClick={() => set({ ...st, stepIndex: 6 })}
           >
             Build plan
@@ -236,7 +352,7 @@ export default function PlannerFlow({
         </div>
 
         <div className="flex gap-2">
-          <button className="rounded-xl border px-4 py-2" onClick={prev}>
+          <button className="rounded-xl border border-white/15 bg-white/5 px-4 py-2" onClick={prev}>
             Back
           </button>
         </div>
@@ -254,7 +370,7 @@ export default function PlannerFlow({
 
       <div className="space-y-3">
         {active.blocks.map((b) => (
-          <div key={b.id} className="rounded-2xl border p-4">
+          <div key={b.id} className="rounded-2xl border border-white/15 bg-white/5 p-4">
             <div className="font-semibold">{b.title}</div>
             <div className="text-sm opacity-70">
               {formatHm(b.start)} – {formatHm(b.end)} · {b.category}
@@ -262,7 +378,7 @@ export default function PlannerFlow({
 
             <div className="mt-3 flex flex-wrap gap-2">
               <button
-                className="rounded-xl border px-3 py-2"
+                className="rounded-xl border border-white/15 bg-black/30 px-3 py-2"
                 onClick={() => {
                   const updatedBlocks = active.blocks.map((x) =>
                     x.id === b.id ? shiftBlockMinutes(x, -15) : x
@@ -274,7 +390,7 @@ export default function PlannerFlow({
               </button>
 
               <button
-                className="rounded-xl border px-3 py-2"
+                className="rounded-xl border border-white/15 bg-black/30 px-3 py-2"
                 onClick={() => {
                   const updatedBlocks = active.blocks.map((x) =>
                     x.id === b.id ? shiftBlockMinutes(x, 15) : x
@@ -286,7 +402,7 @@ export default function PlannerFlow({
               </button>
 
               <button
-                className="rounded-xl border px-3 py-2"
+                className="rounded-xl border border-white/15 bg-black/30 px-3 py-2"
                 onClick={() => {
                   const updatedBlocks = active.blocks.map((x) =>
                     x.id === b.id ? resizeBlockMinutes(x, -15) : x
@@ -298,7 +414,7 @@ export default function PlannerFlow({
               </button>
 
               <button
-                className="rounded-xl border px-3 py-2"
+                className="rounded-xl border border-white/15 bg-black/30 px-3 py-2"
                 onClick={() => {
                   const updatedBlocks = active.blocks.map((x) =>
                     x.id === b.id ? resizeBlockMinutes(x, 15) : x
@@ -317,7 +433,7 @@ export default function PlannerFlow({
         <div className="text-lg font-semibold">Tasks</div>
         <div className="mt-2 space-y-2">
           {active.tasks.map((t) => (
-            <div key={t.id} className="rounded-2xl border p-3 flex items-center justify-between">
+            <div key={t.id} className="rounded-2xl border border-white/15 bg-white/5 p-3 flex items-center justify-between">
               <div>
                 <div className="font-semibold">{t.title}</div>
                 <div className="text-sm opacity-70">
@@ -328,7 +444,7 @@ export default function PlannerFlow({
                 </div>
               </div>
               <button
-                className="rounded-xl border px-3 py-2"
+                className="rounded-xl border border-white/15 bg-black/30 px-3 py-2"
                 onClick={() => {
                   const updatedTasks = active.tasks.map((x) =>
                     x.id === t.id
@@ -347,14 +463,14 @@ export default function PlannerFlow({
 
       <div className="pt-2 flex gap-2 flex-wrap">
         <button
-          className="rounded-xl border px-4 py-2"
+          className="rounded-xl border border-white/15 bg-white/5 px-4 py-2"
           onClick={() => set({ ...st, stepIndex: 1, variants: undefined })}
         >
           Create a new plan
         </button>
 
         <button
-          className="rounded-xl border px-4 py-2"
+          className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 disabled:opacity-50"
           onClick={() => {
             const nextKey = activeKey === "A" ? "B" : "A";
             set({ ...st, variants: { ...st.variants, active: nextKey as "A" | "B" } });
