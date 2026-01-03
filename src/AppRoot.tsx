@@ -19,6 +19,12 @@ export default function AppRoot() {
   const [state, setState] = useState<AppState>(initialState);
   const [projects, setProjects] = useState<Project[]>(() => loadProjects());
 
+  const activeProject = useMemo(() => {
+    const id = state.activeProjectId;
+    if (!id) return undefined;
+    return projects.find((p) => p.id === id);
+  }, [projects, state.activeProjectId]);
+
   const shouldBlockUnload = useMemo(() => {
     return () => state.mode === "world";
   }, [state.mode]);
@@ -46,6 +52,14 @@ export default function AppRoot() {
       activeWorld: worldId,
       activeProjectId: p.id,
     }));
+  }
+
+  function saveProject(p: Project) {
+    setProjects((prev) => upsertProject(prev, p));
+  }
+
+  function switchWorld(worldId: WorldId) {
+    openWorldNew(worldId);
   }
 
   function deleteActiveProject() {
@@ -87,10 +101,13 @@ export default function AppRoot() {
 
       {state.mode === "world" && (
         <WorldShell
-          worldId={state.activeWorld ?? "not_sure"}
+          worldId={state.activeWorld ?? activeProject?.worldId ?? "not_sure"}
           projectId={state.activeProjectId}
+          project={activeProject}
+          onSaveProject={saveProject}
           onExitToHome={goHome}
           onDeleteActiveProject={deleteActiveProject}
+          onSwitchWorld={switchWorld}
         />
       )}
     </AppShell>
