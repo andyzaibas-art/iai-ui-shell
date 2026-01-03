@@ -15,6 +15,61 @@ import {
 
 const initialState: AppState = { mode: "home" };
 
+function isWorldId(v: unknown): v is WorldId {
+  return (
+    v === "game" ||
+    v === "not_sure" ||
+    v === "planner" ||
+    v === "writing" ||
+    v === "video" ||
+    v === "app"
+  );
+}
+
+function makeId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeImportedProject(raw: unknown): Project | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o: any = raw;
+
+  if (!isWorldId(o.worldId)) return null;
+
+  const t = Date.now();
+
+  const origin: Project["origin"] =
+    o.origin === "home" || o.origin === "not_sure" ? o.origin : "home";
+
+  const status: Project["status"] =
+    o.status === "draft" || o.status === "done" ? o.status : "draft";
+
+  const createdAt = typeof o.createdAt === "number" ? o.createdAt : t;
+  const updatedAt = typeof o.updatedAt === "number" ? o.updatedAt : t;
+
+  const title =
+    typeof o.title === "string" && o.title.trim().length > 0
+      ? o.title.trim()
+      : `Imported ${o.worldId}`;
+
+  const state =
+    o.state && typeof o.state === "object" ? (o.state as Record<string, unknown>) : {};
+
+  const id =
+    typeof o.id === "string" && o.id.trim().length > 0 ? o.id.trim() : makeId();
+
+  return {
+    id,
+    worldId: o.worldId,
+    origin,
+    createdAt,
+    updatedAt,
+    status,
+    title,
+    state,
+  };
+}
+
 export default function AppRoot() {
   const [state, setState] = useState<AppState>(initialState);
   const [projects, setProjects] = useState<Project[]>(() => loadProjects());
@@ -68,6 +123,16 @@ export default function AppRoot() {
     setProjects((prev) => prev.filter((p) => p.id !== id));
   }
 
+  function importProjectJson(raw: unknown) {
+    const p = normalizeImportedProject(raw);
+    if (!p) {
+      alert("Invalid project JSON.");
+      return;
+    }
+    setProjects((prev) => upsertProject(prev, p));
+    setState((s) => ({ ...s, mode: "projects" }));
+  }
+
   return (
     <AppShell
       mode={state.mode}
@@ -96,6 +161,7 @@ export default function AppRoot() {
             setProjects((prev) => prev.filter((p) => p.id !== id))
           }
           onBackHome={goHome}
+          onImportProjectJson={importProjectJson}
         />
       )}
 
