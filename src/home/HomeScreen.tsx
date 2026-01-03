@@ -9,7 +9,7 @@ export default function HomeScreen({
   onOpenProjects: () => void;
 }) {
   return (
-    <div className="min-h-dvh flex flex-col px-6 py-6">
+    <div className="h-full flex flex-col px-6 py-6">
       <div className="text-sm text-white/70">
         Your private IAI. Local-first. Consent-based.
       </div>

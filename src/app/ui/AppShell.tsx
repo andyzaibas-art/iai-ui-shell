@@ -26,7 +26,7 @@ export default function AppShell({
   ];
 
   return (
-    <div className="min-h-dvh w-full flex overflow-x-hidden bg-black text-white">
+    <div className="h-dvh w-full flex overflow-hidden bg-black text-white">
       {/* Desktop rail */}
       <div className="hidden md:flex w-16 flex-col items-center gap-3 border-r border-white/10 bg-black/60 py-4">
         <button
@@ -65,7 +65,6 @@ export default function AppShell({
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
         <div className="h-12 flex items-center justify-between px-3 border-b border-white/10 bg-black/60">
-          {/* Mobile menu button only */}
           <button
             className="md:hidden w-10 h-10 rounded-xl border border-white/10 bg-white/5"
             onClick={() => setOpen(true)}
@@ -74,7 +73,6 @@ export default function AppShell({
             ☰
           </button>
 
-          {/* ONLY brand in whole app */}
           <div className="text-sm font-semibold tracking-[0.22em] text-white/90">
             I•A•I
           </div>
@@ -83,7 +81,7 @@ export default function AppShell({
           <div className="hidden md:block w-10 h-10" />
         </div>
 
-        {/* Content */}
+        {/* Content (scroll HERE, not body) */}
         <div className="flex-1 min-h-0 overflow-auto">{children}</div>
       </div>
 
@@ -144,7 +142,7 @@ export default function AppShell({
                       <span>{w.icon}</span>
                       <span>{w.label}</span>
                     </div>
-                    {!w.enabled && <span className="text-xs opacity-70">Soon</span>}
+                    {!w.enabled && <span className="text-xs opacity-70">Coming soon</span>}
                   </div>
                 </button>
               ))}
