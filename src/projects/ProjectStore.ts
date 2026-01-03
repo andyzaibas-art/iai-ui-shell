@@ -1,4 +1,5 @@
 import { WorldId } from "../app/modes";
+import { WORLD_CATALOG } from "../app/worldCatalog";
 
 export type ProjectStatus = "draft" | "done";
 
@@ -9,11 +10,12 @@ export type Project = {
   createdAt: number;
   updatedAt: number;
   status: ProjectStatus;
-  title: string; // human-readable title
+  title: string;
   state: Record<string, unknown>;
 };
 
 const STORAGE_KEY = "iai_ui_projects_v1";
+const SEQ_KEY = "iai_ui_project_seq_v1";
 
 function now() {
   return Date.now();
@@ -23,31 +25,37 @@ function generateId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function worldLabel(worldId: WorldId) {
-  switch (worldId) {
-    case "game":
-      return "Game";
-    case "not_sure":
-      return "Not sure";
-    case "planner":
-      return "Planner";
-    case "writing":
-      return "Writing";
-    case "video":
-      return "Video";
-    case "app":
-      return "App / Tool";
-    default:
-      return "World";
+function readJson<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
   }
 }
 
-let counters: Record<string, number> | null = null;
+function writeJson(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore
+  }
+}
 
-function nextCounter(key: string) {
-  if (!counters) counters = {};
-  counters[key] = (counters[key] ?? 0) + 1;
-  return counters[key];
+function loadSeq(): Record<string, number> {
+  const v = readJson<Record<string, number>>(SEQ_KEY);
+  if (!v || typeof v !== "object") return {};
+  return v;
+}
+
+function nextSeq(worldId: WorldId): number {
+  const seq = loadSeq();
+  const k = worldId as string;
+  const n = (seq[k] ?? 0) + 1;
+  seq[k] = n;
+  writeJson(SEQ_KEY, seq);
+  return n;
 }
 
 export function loadProjects(): Project[] {
@@ -71,8 +79,10 @@ export function createProject(params: {
   origin: "home" | "not_sure";
 }): Project {
   const t = now();
-  const n = nextCounter(params.worldId);
-  const title = `${worldLabel(params.worldId)} #${n}`;
+  const n = nextSeq(params.worldId);
+  const label = WORLD_CATALOG[params.worldId]?.label ?? params.worldId;
+  const title = `${label} #${n}`;
+
   return {
     id: generateId(),
     worldId: params.worldId,
