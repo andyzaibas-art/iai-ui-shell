@@ -11,16 +11,35 @@ export type GameNode = {
   isEnd?: boolean;
 };
 
+export type GameDraft = {
+  title?: string;
+  hero?: string;
+  setting?: string;
+  goal?: string;
+  twist?: string;
+  tone?: "fun" | "focus" | "mystery";
+};
+
+export type GameMode = "play" | "create";
+
 export type GameState = {
+  mode?: GameMode;
   nodeId: string;
   history: { nodeId: string; choiceLabel: string }[];
+  draft?: GameDraft;
+  story?: Record<string, GameNode>;
 };
 
 export function newGameState(): GameState {
-  return { nodeId: "start", history: [] };
+  return {
+    mode: "play",
+    nodeId: "start",
+    history: [],
+    draft: { tone: "mystery" },
+  };
 }
 
-// Simple interactive story graph (v0.1). Keep it short, fun, universal.
+// Built-in story (fallback). Keep it short, fun, universal.
 export const GAME_STORY: Record<string, GameNode> = {
   start: {
     id: "start",
@@ -183,13 +202,106 @@ export const GAME_STORY: Record<string, GameNode> = {
   },
 };
 
-export function getNode(id: string): GameNode {
-  return GAME_STORY[id] ?? GAME_STORY["start"];
+export function getNode(id: string, story?: Record<string, GameNode>): GameNode {
+  const g = story ?? GAME_STORY;
+  return g[id] ?? g["start"];
 }
 
 export function applyChoice(state: GameState, choice: GameChoice): GameState {
   return {
+    ...state,
     nodeId: choice.to,
     history: [...state.history, { nodeId: state.nodeId, choiceLabel: choice.label }],
+  };
+}
+
+function t(s?: string) {
+  return (s ?? "").trim();
+}
+
+export function generateStory(draft: GameDraft): Record<string, GameNode> {
+  const title = t(draft.title) || "The Choice";
+  const hero = t(draft.hero) || "You";
+  const setting = t(draft.setting) || "a quiet unknown place";
+  const goal = t(draft.goal) || "reach something important";
+  const twist = t(draft.twist);
+  const tone = draft.tone ?? "mystery";
+
+  const mood =
+    tone === "fun"
+      ? "Everything feels playful, like the world is winking at you."
+      : tone === "focus"
+      ? "Everything feels sharp and clear. Every step matters."
+      : "Something hidden is watching. Small details feel important.";
+
+  const twistLine = twist ? `\n\nTwist: ${twist}` : "";
+
+  const start: GameNode = {
+    id: "start",
+    title,
+    body: `${hero} is in ${setting}.\n\nGoal: ${goal}.\n\n${mood}${twistLine}`,
+    choices: [
+      { label: "Take the direct path", to: "path_a" },
+      { label: "Ask for help first", to: "path_b" },
+      { label: "Try a risky shortcut", to: "path_c" },
+    ],
+  };
+
+  const pathA: GameNode = {
+    id: "path_a",
+    title: "Direct Path",
+    body:
+      "You move straight toward your goal. The road answers with one question: how steady are you today?",
+    choices: [{ label: "Keep going", to: "end_a" }],
+  };
+
+  const pathB: GameNode = {
+    id: "path_b",
+    title: "A Helping Hand",
+    body:
+      "You stop and ask. Someone (or something) offers guidance — but it wants a promise in return.",
+    choices: [{ label: "Accept the guidance", to: "end_b" }],
+  };
+
+  const pathC: GameNode = {
+    id: "path_c",
+    title: "Shortcut",
+    body:
+      "You take the shortcut. It’s faster… and stranger. You feel the world bend slightly around your decision.",
+    choices: [{ label: "Commit to the shortcut", to: "end_c" }],
+  };
+
+  const endA: GameNode = {
+    id: "end_a",
+    title: "Ending: Discipline",
+    body: "You arrive by pure discipline. It wasn’t easy, but it was yours.",
+    choices: [{ label: "Play again", to: "start" }],
+    isEnd: true,
+  };
+
+  const endB: GameNode = {
+    id: "end_b",
+    title: "Ending: Alliance",
+    body: "You arrive with help — and you don’t forget who stood with you.",
+    choices: [{ label: "Play again", to: "start" }],
+    isEnd: true,
+  };
+
+  const endC: GameNode = {
+    id: "end_c",
+    title: "Ending: Wild Card",
+    body: "You arrive through chaos. The reward feels bigger… and a bit dangerous.",
+    choices: [{ label: "Play again", to: "start" }],
+    isEnd: true,
+  };
+
+  return {
+    start,
+    path_a: pathA,
+    path_b: pathB,
+    path_c: pathC,
+    end_a: endA,
+    end_b: endB,
+    end_c: endC,
   };
 }
