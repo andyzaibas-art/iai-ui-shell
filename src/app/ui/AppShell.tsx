@@ -1,5 +1,14 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { WorldId, AppMode } from "../modes";
+import { WORLD_CATALOG, WORLD_DEFAULT_ORDER } from "../worldCatalog";
+
+function WorldIcon({ id }: { id: WorldId }) {
+  const meta = WORLD_CATALOG[id];
+  if (meta.iconSrc) {
+    return <img src={meta.iconSrc} alt="" className="w-5 h-5" draggable={false} />;
+  }
+  return <span>{meta.iconText ?? "⬚"}</span>;
+}
 
 export default function AppShell({
   mode,
@@ -12,18 +21,11 @@ export default function AppShell({
   onHome: () => void;
   onProjects: () => void;
   onOpenWorld: (id: WorldId) => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
 
-  const worlds: { id: WorldId; label: string; enabled: boolean; icon: string }[] = [
-    { id: "game", label: "Game", enabled: true, icon: "🎮" },
-    { id: "not_sure", label: "Not sure", enabled: true, icon: "❓" },
-    { id: "planner", label: "Planner", enabled: true, icon: "🗓️" },
-    { id: "writing", label: "Writing", enabled: true, icon: "✍️" },
-    { id: "video", label: "Video", enabled: false, icon: "🎥" },
-    { id: "app", label: "App / Tool", enabled: false, icon: "🛠️" },
-  ];
+  const worlds = WORLD_DEFAULT_ORDER.map((id) => WORLD_CATALOG[id]);
 
   return (
     <div className="h-dvh w-full flex overflow-hidden bg-black text-white">
@@ -81,7 +83,7 @@ export default function AppShell({
           <div className="hidden md:block w-10 h-10" />
         </div>
 
-        {/* Content (scroll HERE, not body) */}
+        {/* Content */}
         <div className="flex-1 min-h-0 overflow-auto">{children}</div>
       </div>
 
@@ -139,7 +141,7 @@ export default function AppShell({
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span>{w.icon}</span>
+                      <WorldIcon id={w.id} />
                       <span>{w.label}</span>
                     </div>
                     {!w.enabled && <span className="text-xs opacity-70">Coming soon</span>}
