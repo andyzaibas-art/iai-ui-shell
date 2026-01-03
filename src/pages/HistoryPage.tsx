@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import Modal from '../components/Modal';
 import { clearWrites, loadWrites, removeWrite, type WriteDraft } from '../lib/storage';
 import { formatWhen } from '../lib/time';

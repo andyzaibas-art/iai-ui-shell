@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from "react";
 import { uid } from '../lib/id';
 
 type Msg = {

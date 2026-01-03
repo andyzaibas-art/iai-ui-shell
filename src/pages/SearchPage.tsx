@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 
 const demoDocs = [
   { title: 'How to create travel commands', snippet: 'Define quick actions like “Find flights” and ask clarifying questions…' },
