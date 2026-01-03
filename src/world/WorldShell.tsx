@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import PlannerFlow from "../worlds/planner/PlannerFlow";
 import GameFlow from "../worlds/game/GameFlow";
 import NotSureFlow from "../worlds/not_sure/NotSureFlow";
@@ -12,6 +12,19 @@ import { GameState, newGameState } from "../worlds/game/gameModel";
 import { NotSureState, newNotSureState } from "../worlds/not_sure/notSureModel";
 import { WritingState, newWritingState } from "../worlds/writing/writingModel";
 import { WorldId } from "../app/modes";
+import { WORLD_CATALOG } from "../app/worldCatalog";
+
+function downloadJson(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 export default function WorldShell({
   worldId,
@@ -43,6 +56,11 @@ export default function WorldShell({
 
   const writingState: WritingState =
     (project?.state?.writing as WritingState) ?? newWritingState();
+
+  const title = useMemo(() => {
+    const base = WORLD_CATALOG[worldId]?.label ?? worldId;
+    return project?.title ? `${base} — ${project.title}` : base;
+  }, [project?.title, worldId]);
 
   function renderWorld() {
     if (worldId === "planner") {
@@ -118,40 +136,76 @@ export default function WorldShell({
   }
 
   return (
-    <div className="min-h-dvh flex flex-col">
-      <div className="p-4 flex items-center justify-between border-b">
-        <div className="font-semibold">
-          World: {worldId} {projectId ? `(project ${projectId})` : ""}
+    <div className="h-full flex flex-col">
+      <div className="p-4 flex items-center justify-between border-b border-white/10 bg-black/40">
+        <div className="min-w-0">
+          <div className="font-semibold truncate">{title}</div>
+          <div className="text-xs opacity-60 truncate">
+            {projectId ? `Project: ${projectId}` : "No project id"}
+          </div>
         </div>
-        <button className="rounded-xl border px-3 py-2" onClick={() => setShowExit(true)}>
-          Exit
-        </button>
+
+        <div className="flex items-center gap-2">
+          <button
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+            onClick={() => {
+              if (!project) return;
+              const safeTitle = (project.title || "project")
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "_")
+                .replace(/^_+|_+$/g, "");
+              downloadJson(`iai_${project.worldId}_${safeTitle}_${project.id}.json`, project);
+            }}
+            disabled={!project}
+            aria-label="Export project as JSON"
+            title="Export JSON"
+          >
+            Export
+          </button>
+
+          <button
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+            onClick={() => setShowExit(true)}
+          >
+            Exit
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 p-6 overflow-auto">{renderWorld()}</div>
 
       {showExit && (
         <div className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl border bg-white p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Leave this world?</div>
             <div className="mt-2 text-sm opacity-80">Choose: save, delete, or stay.</div>
 
             <div className="mt-4 flex flex-col gap-2">
-              <button className="rounded-xl border px-4 py-3 text-left" onClick={onExitToHome}>
+              <button
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                onClick={() => {
+                  setShowExit(false);
+                  onExitToHome();
+                }}
+              >
                 Save and exit
               </button>
 
               <button
-                className="rounded-xl border px-4 py-3 text-left"
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
                 onClick={() => {
                   onDeleteActiveProject();
+                  setShowExit(false);
                   onExitToHome();
                 }}
               >
                 Delete and start over
               </button>
 
-              <button className="rounded-xl border px-4 py-3 text-left" onClick={() => setShowExit(false)}>
+              <button
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                onClick={() => setShowExit(false)}
+              >
                 Cancel
               </button>
             </div>
