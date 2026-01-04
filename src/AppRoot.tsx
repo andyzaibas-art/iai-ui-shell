@@ -133,6 +133,17 @@ export default function AppRoot() {
     setState((s) => ({ ...s, mode: "projects" }));
   }
 
+  function renameProject(id: string, title: string) {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+
+    setProjects((prev) => {
+      const p = prev.find((x) => x.id === id);
+      if (!p) return prev;
+      return upsertProject(prev, { ...p, title: trimmed });
+    });
+  }
+
   return (
     <AppShell
       mode={state.mode}
@@ -162,6 +173,7 @@ export default function AppRoot() {
           }
           onBackHome={goHome}
           onImportProjectJson={importProjectJson}
+          onRenameProject={renameProject}
         />
       )}
 
