@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Project } from "./ProjectStore";
-import { WORLD_CATALOG } from "../app/worldCatalog";
+import { WORLD_CATALOG, WORLD_DEFAULT_ORDER } from "../app/worldCatalog";
+import type { WorldId } from "../app/modes";
 
 function fmt(ts: number) {
   try {
@@ -9,6 +10,8 @@ function fmt(ts: number) {
     return String(ts);
   }
 }
+
+type WorldFilter = "all" | WorldId;
 
 export default function ProjectList({
   projects,
@@ -30,6 +33,9 @@ export default function ProjectList({
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
+  const [q, setQ] = useState("");
+  const [worldFilter, setWorldFilter] = useState<WorldFilter>("all");
+
   async function handleImportFile(file: File) {
     try {
       const text = await file.text();
@@ -39,6 +45,18 @@ export default function ProjectList({
       alert("Failed to import. Please select a valid project JSON file.");
     }
   }
+
+  const filtered = useMemo(() => {
+    const query = q.trim().toLowerCase();
+
+    return projects.filter((p) => {
+      if (worldFilter !== "all" && p.worldId !== worldFilter) return false;
+      if (!query) return true;
+
+      const hay = `${p.title} ${p.worldId} ${p.status}`.toLowerCase();
+      return hay.includes(query);
+    });
+  }, [projects, q, worldFilter]);
 
   return (
     <div className="h-full flex flex-col">
@@ -75,14 +93,54 @@ export default function ProjectList({
         </div>
       </div>
 
+      <div className="p-4 border-b border-white/10 bg-black/20">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            className="flex-1 rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search projects…"
+          />
+
+          <select
+            className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
+            value={worldFilter}
+            onChange={(e) => setWorldFilter(e.target.value as WorldFilter)}
+          >
+            <option value="all">All worlds</option>
+            {WORLD_DEFAULT_ORDER.map((id) => (
+              <option key={id} value={id}>
+                {WORLD_CATALOG[id]?.label ?? id}
+              </option>
+            ))}
+          </select>
+
+          <button
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+            onClick={() => {
+              setQ("");
+              setWorldFilter("all");
+            }}
+          >
+            Clear
+          </button>
+        </div>
+
+        <div className="mt-2 text-xs text-white/60">
+          Showing {filtered.length} of {projects.length}
+        </div>
+      </div>
+
       <div className="flex-1 p-6 overflow-auto">
         {projects.length === 0 ? (
           <div className="opacity-80">
             No projects yet. Open a world from Home to create one, or import a JSON.
           </div>
+        ) : filtered.length === 0 ? (
+          <div className="opacity-80">No matches.</div>
         ) : (
           <div className="space-y-3">
-            {projects.map((p) => {
+            {filtered.map((p) => {
               const worldLabel = WORLD_CATALOG[p.worldId]?.label ?? p.worldId;
               const isRenaming = renameId === p.id;
 
@@ -170,3 +228,4 @@ export default function ProjectList({
     </div>
   );
 }
+
