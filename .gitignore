@@ -6,3 +6,6 @@ dist/
 .vscode/
 .idea/
 *.log
+
+# TypeScript build cache
+*.tsbuildinfo
