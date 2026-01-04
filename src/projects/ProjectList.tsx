@@ -35,6 +35,8 @@ export default function ProjectList({
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
   const [q, setQ] = useState("");
   const [worldFilter, setWorldFilter] = useState<WorldFilter>("all");
 
@@ -59,6 +61,11 @@ export default function ProjectList({
       return hay.includes(query);
     });
   }, [projects, q, worldFilter]);
+
+  const deleteProject = useMemo(() => {
+    if (!deleteId) return null;
+    return projects.find((p) => p.id === deleteId) ?? null;
+  }, [projects, deleteId]);
 
   return (
     <div className="h-full flex flex-col">
@@ -185,7 +192,7 @@ export default function ProjectList({
 
                         <button
                           className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
-                          onClick={() => onDeleteProject(p.id)}
+                          onClick={() => setDeleteId(p.id)}
                         >
                           Delete
                         </button>
@@ -234,6 +241,46 @@ export default function ProjectList({
           </div>
         )}
       </div>
+
+      {deleteId && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setDeleteId(null)}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
+            <div className="font-semibold">Delete project?</div>
+            <div className="mt-2 text-sm opacity-80">
+              This will permanently remove{" "}
+              <span className="font-semibold">
+                {deleteProject?.title ?? "this project"}
+              </span>
+              .
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                onClick={() => {
+                  const id = deleteId;
+                  setDeleteId(null);
+                  if (!id) return;
+                  onDeleteProject(id);
+                }}
+              >
+                Delete
+              </button>
+
+              <button
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                onClick={() => setDeleteId(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
