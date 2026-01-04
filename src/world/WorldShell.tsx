@@ -15,7 +15,9 @@ import { WorldId } from "../app/modes";
 import { WORLD_CATALOG } from "../app/worldCatalog";
 
 function downloadJson(filename: string, data: unknown) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -44,6 +46,8 @@ export default function WorldShell({
   onSwitchWorld: (worldId: WorldId) => void;
 }) {
   const [showExit, setShowExit] = useState(false);
+  const [showRename, setShowRename] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
 
   const plannerState: PlannerState =
     (project?.state?.planner as PlannerState) ?? newPlannerState();
@@ -69,7 +73,10 @@ export default function WorldShell({
           value={plannerState}
           onChange={(next) => {
             if (!project) return;
-            onSaveProject({ ...project, state: { ...project.state, planner: next } });
+            onSaveProject({
+              ...project,
+              state: { ...project.state, planner: next },
+            });
           }}
         />
       );
@@ -93,7 +100,10 @@ export default function WorldShell({
           value={notSureState}
           onChange={(next) => {
             if (!project) return;
-            onSaveProject({ ...project, state: { ...project.state, not_sure: next } });
+            onSaveProject({
+              ...project,
+              state: { ...project.state, not_sure: next },
+            });
           }}
           onChooseWorld={(target) => onSwitchWorld(target)}
         />
@@ -106,7 +116,10 @@ export default function WorldShell({
           value={writingState}
           onChange={(next) => {
             if (!project) return;
-            onSaveProject({ ...project, state: { ...project.state, writing: next } });
+            onSaveProject({
+              ...project,
+              state: { ...project.state, writing: next },
+            });
           }}
         />
       );
@@ -150,11 +163,27 @@ export default function WorldShell({
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
             onClick={() => {
               if (!project) return;
+              setRenameValue(project.title ?? "");
+              setShowRename(true);
+            }}
+            disabled={!project}
+            title="Rename"
+          >
+            Rename
+          </button>
+
+          <button
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+            onClick={() => {
+              if (!project) return;
               const safeTitle = (project.title || "project")
                 .toLowerCase()
                 .replace(/[^a-z0-9]+/g, "_")
                 .replace(/^_+|_+$/g, "");
-              downloadJson(`iai_${project.worldId}_${safeTitle}_${project.id}.json`, project);
+              downloadJson(
+                `iai_${project.worldId}_${safeTitle}_${project.id}.json`,
+                project
+              );
             }}
             disabled={!project}
             aria-label="Export project as JSON"
@@ -174,11 +203,58 @@ export default function WorldShell({
 
       <div className="flex-1 p-6 overflow-auto">{renderWorld()}</div>
 
+      {showRename && (
+        <div className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
+            <div className="font-semibold">Rename project</div>
+            <div className="mt-2 text-sm opacity-80">
+              Change the title. It will persist in My projects.
+            </div>
+
+            <input
+              className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              placeholder="Project title…"
+              autoFocus
+            />
+
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                onClick={() => {
+                  if (!project) return;
+                  const t = renameValue.trim();
+                  if (!t) return;
+                  onSaveProject({ ...project, title: t });
+                  setShowRename(false);
+                  setRenameValue("");
+                }}
+              >
+                Save
+              </button>
+
+              <button
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                onClick={() => {
+                  setShowRename(false);
+                  setRenameValue("");
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showExit && (
         <div className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Leave this world?</div>
-            <div className="mt-2 text-sm opacity-80">Choose: save, delete, or stay.</div>
+            <div className="mt-2 text-sm opacity-80">
+              Choose: save, delete, or stay.
+            </div>
 
             <div className="mt-4 flex flex-col gap-2">
               <button
