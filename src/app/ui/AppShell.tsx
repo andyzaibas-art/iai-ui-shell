@@ -1,11 +1,19 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { WorldId, AppMode } from "../modes";
 import { WORLD_CATALOG, WORLD_DEFAULT_ORDER } from "../worldCatalog";
+import { useUiPrefs } from "../stores/UiPrefsStore";
 
 function WorldIcon({ id }: { id: WorldId }) {
   const meta = WORLD_CATALOG[id];
   if (meta.iconSrc) {
-    return <img src={meta.iconSrc} alt="" className="w-5 h-5" draggable={false} />;
+    return (
+      <img
+        src={meta.iconSrc}
+        alt=""
+        className="w-5 h-5 opacity-90"
+        draggable={false}
+      />
+    );
   }
   return <span>{meta.iconText ?? "⬚"}</span>;
 }
@@ -24,8 +32,16 @@ export default function AppShell({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const prefs = useUiPrefs();
 
-  const worlds = WORLD_DEFAULT_ORDER.map((id) => WORLD_CATALOG[id]);
+  const orderedIds = useMemo(() => {
+    const available = new Set(WORLD_DEFAULT_ORDER);
+    const fromPrefs = (prefs.iconOrder ?? []).filter((id) => available.has(id));
+    const missing = WORLD_DEFAULT_ORDER.filter((id) => !fromPrefs.includes(id));
+    return [...fromPrefs, ...missing];
+  }, [prefs.iconOrder]);
+
+  const worlds = orderedIds.map((id) => WORLD_CATALOG[id]);
 
   return (
     <div className="h-dvh w-full flex overflow-hidden bg-black text-white">
@@ -90,7 +106,10 @@ export default function AppShell({
       {/* Drawer */}
       {open && (
         <div className="fixed inset-0 z-50 flex">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} />
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setOpen(false)}
+          />
           <div className="relative w-80 max-w-[85vw] h-full bg-black border-r border-white/10 p-4">
             <div className="flex items-center justify-between">
               <div className="font-semibold">Menu</div>
@@ -144,7 +163,9 @@ export default function AppShell({
                       <WorldIcon id={w.id} />
                       <span>{w.label}</span>
                     </div>
-                    {!w.enabled && <span className="text-xs opacity-70">Coming soon</span>}
+                    {!w.enabled && (
+                      <span className="text-xs opacity-70">Coming soon</span>
+                    )}
                   </div>
                 </button>
               ))}
@@ -152,10 +173,16 @@ export default function AppShell({
 
             <div className="mt-6 text-sm font-semibold text-white/80">System</div>
             <div className="mt-2 space-y-2">
-              <button className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left opacity-70" disabled>
+              <button
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left opacity-70"
+                disabled
+              >
                 Language — later
               </button>
-              <button className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left opacity-70" disabled>
+              <button
+                className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left opacity-70"
+                disabled
+              >
                 ICP mode (8/88/888) — later
               </button>
             </div>
