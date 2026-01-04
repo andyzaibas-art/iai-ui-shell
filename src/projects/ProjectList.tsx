@@ -20,6 +20,7 @@ export default function ProjectList({
   onBackHome,
   onImportProjectJson,
   onRenameProject,
+  onDuplicateProject,
 }: {
   projects: Project[];
   onOpenProject: (id: string) => void;
@@ -27,6 +28,7 @@ export default function ProjectList({
   onBackHome: () => void;
   onImportProjectJson: (raw: unknown) => void;
   onRenameProject: (id: string, title: string) => void;
+  onDuplicateProject: (id: string) => void;
 }) {
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -166,6 +168,13 @@ export default function ProjectList({
 
                         <button
                           className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
+                          onClick={() => onDuplicateProject(p.id)}
+                        >
+                          Duplicate
+                        </button>
+
+                        <button
+                          className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
                           onClick={() => {
                             setRenameId(p.id);
                             setRenameValue(p.title);
@@ -228,4 +237,3 @@ export default function ProjectList({
     </div>
   );
 }
-

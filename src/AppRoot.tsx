@@ -30,6 +30,14 @@ function makeId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function cloneJson<T>(v: T): T {
+  try {
+    return JSON.parse(JSON.stringify(v)) as T;
+  } catch {
+    return v;
+  }
+}
+
 function normalizeImportedProject(raw: unknown): Project | null {
   if (!raw || typeof raw !== "object") return null;
   const o: any = raw;
@@ -53,7 +61,9 @@ function normalizeImportedProject(raw: unknown): Project | null {
       : `Imported ${o.worldId}`;
 
   const state =
-    o.state && typeof o.state === "object" ? (o.state as Record<string, unknown>) : {};
+    o.state && typeof o.state === "object"
+      ? (o.state as Record<string, unknown>)
+      : {};
 
   const id =
     typeof o.id === "string" && o.id.trim().length > 0 ? o.id.trim() : makeId();
@@ -144,6 +154,26 @@ export default function AppRoot() {
     });
   }
 
+  function duplicateProject(id: string) {
+    setProjects((prev) => {
+      const p = prev.find((x) => x.id === id);
+      if (!p) return prev;
+
+      const t = Date.now();
+      const copy: Project = {
+        ...p,
+        id: makeId(),
+        createdAt: t,
+        updatedAt: t,
+        status: "draft",
+        title: `${p.title} (copy)`,
+        state: cloneJson(p.state),
+      };
+
+      return upsertProject(prev, copy);
+    });
+  }
+
   return (
     <AppShell
       mode={state.mode}
@@ -174,6 +204,7 @@ export default function AppRoot() {
           onBackHome={goHome}
           onImportProjectJson={importProjectJson}
           onRenameProject={renameProject}
+          onDuplicateProject={duplicateProject}
         />
       )}
 
