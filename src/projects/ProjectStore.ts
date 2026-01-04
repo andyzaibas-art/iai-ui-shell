@@ -58,13 +58,19 @@ function nextSeq(worldId: WorldId): number {
   return n;
 }
 
+function sortNewestFirst(items: Project[]): Project[] {
+  return items
+    .slice()
+    .sort((a, b) => (b?.updatedAt ?? 0) - (a?.updatedAt ?? 0));
+}
+
 export function loadProjects(): Project[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed as Project[];
+    return sortNewestFirst(parsed as Project[]);
   } catch {
     return [];
   }
@@ -96,12 +102,11 @@ export function createProject(params: {
 }
 
 export function upsertProject(projects: Project[], project: Project): Project[] {
-  const idx = projects.findIndex((p) => p.id === project.id);
-  const updated = { ...project, updatedAt: now() };
-  if (idx === -1) return [updated, ...projects];
-  const copy = projects.slice();
-  copy[idx] = updated;
-  return copy;
+  const updated: Project = { ...project, updatedAt: now() };
+
+  // Always bubble updated project to top (most-recent first).
+  const rest = projects.filter((p) => p.id !== updated.id);
+  return [updated, ...rest];
 }
 
 export function deleteProject(projects: Project[], id: string): Project[] {
