@@ -90,6 +90,10 @@ export default function AppRoot() {
     return projects.find((p) => p.id === id);
   }, [projects, state.activeProjectId]);
 
+  const lastProject = useMemo(() => {
+    return projects[0];
+  }, [projects]);
+
   const shouldBlockUnload = useMemo(() => {
     return () => state.mode === "world";
   }, [state.mode]);
@@ -106,6 +110,17 @@ export default function AppRoot() {
 
   function openProjects() {
     setState((s) => ({ ...s, mode: "projects" }));
+  }
+
+  function openProjectById(id: string) {
+    const p = projects.find((x) => x.id === id);
+    if (!p) return;
+    setState((s) => ({
+      ...s,
+      mode: "world",
+      activeWorld: p.worldId,
+      activeProjectId: p.id,
+    }));
   }
 
   function openWorldNew(worldId: WorldId) {
@@ -182,22 +197,18 @@ export default function AppRoot() {
       onOpenWorld={openWorldNew}
     >
       {state.mode === "home" && (
-        <HomeScreen onEnterWorld={openWorldNew} onOpenProjects={openProjects} />
+        <HomeScreen
+          onEnterWorld={openWorldNew}
+          onOpenProjects={openProjects}
+          lastProject={lastProject}
+          onResumeProject={(id) => openProjectById(id)}
+        />
       )}
 
       {state.mode === "projects" && (
         <ProjectList
           projects={projects}
-          onOpenProject={(id) => {
-            const p = projects.find((x) => x.id === id);
-            if (!p) return;
-            setState((s) => ({
-              ...s,
-              mode: "world",
-              activeWorld: p.worldId,
-              activeProjectId: p.id,
-            }));
-          }}
+          onOpenProject={(id) => openProjectById(id)}
           onDeleteProject={(id) =>
             setProjects((prev) => prev.filter((p) => p.id !== id))
           }
