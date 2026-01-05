@@ -61,10 +61,13 @@ export default function WorldShell({
   const writingState: WritingState =
     (project?.state?.writing as WritingState) ?? newWritingState();
 
+  const baseLabel = WORLD_CATALOG[worldId]?.label ?? worldId;
+  const status = project?.status ?? "draft";
+  const statusLabel = status === "done" ? "Published" : "Draft";
+
   const title = useMemo(() => {
-    const base = WORLD_CATALOG[worldId]?.label ?? worldId;
-    return project?.title ? `${base} — ${project.title}` : base;
-  }, [project?.title, worldId]);
+    return project?.title ? `${baseLabel} — ${project.title}` : baseLabel;
+  }, [baseLabel, project?.title]);
 
   function renderWorld() {
     if (worldId === "planner") {
@@ -155,10 +158,27 @@ export default function WorldShell({
           <div className="font-semibold truncate">{title}</div>
           <div className="text-xs opacity-60 truncate">
             {projectId ? `Project: ${projectId}` : "No project id"}
+            {" · "}
+            {statusLabel}
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+            onClick={() => {
+              if (!project) return;
+              onSaveProject({
+                ...project,
+                status: project.status === "done" ? "draft" : "done",
+              });
+            }}
+            disabled={!project}
+            title={status === "done" ? "Unpublish" : "Publish"}
+          >
+            {status === "done" ? "Unpublish" : "Publish"}
+          </button>
+
           <button
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
             onClick={() => {
