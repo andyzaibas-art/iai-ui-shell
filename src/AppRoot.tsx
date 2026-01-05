@@ -62,9 +62,7 @@ function normalizeImportedProject(raw: unknown): Project | null {
       : `Imported ${o.worldId}`;
 
   const state =
-    o.state && typeof o.state === "object"
-      ? (o.state as Record<string, unknown>)
-      : {};
+    o.state && typeof o.state === "object" ? (o.state as Record<string, unknown>) : {};
 
   const id =
     typeof o.id === "string" && o.id.trim().length > 0 ? o.id.trim() : makeId();
@@ -84,6 +82,7 @@ function normalizeImportedProject(raw: unknown): Project | null {
 export default function AppRoot() {
   const [state, setState] = useState<AppState>(initialState);
   const [projects, setProjects] = useState<Project[]>(() => loadProjects());
+  const [readOnly, setReadOnly] = useState(false);
 
   const activeProject = useMemo(() => {
     const id = state.activeProjectId;
@@ -91,9 +90,7 @@ export default function AppRoot() {
     return projects.find((p) => p.id === id);
   }, [projects, state.activeProjectId]);
 
-  const lastProject = useMemo(() => {
-    return projects[0];
-  }, [projects]);
+  const lastProject = useMemo(() => projects[0], [projects]);
 
   const shouldBlockUnload = useMemo(() => {
     return () => state.mode === "world";
@@ -106,16 +103,31 @@ export default function AppRoot() {
   }, [projects]);
 
   function goHome() {
+    setReadOnly(false);
     setState((s) => ({ ...s, mode: "home" }));
   }
 
   function openProjects() {
+    setReadOnly(false);
     setState((s) => ({ ...s, mode: "projects" }));
   }
 
   function openProjectById(id: string) {
     const p = projects.find((x) => x.id === id);
     if (!p) return;
+    setReadOnly(false);
+    setState((s) => ({
+      ...s,
+      mode: "world",
+      activeWorld: p.worldId,
+      activeProjectId: p.id,
+    }));
+  }
+
+  function openProjectReadOnlyById(id: string) {
+    const p = projects.find((x) => x.id === id);
+    if (!p) return;
+    setReadOnly(true);
     setState((s) => ({
       ...s,
       mode: "world",
@@ -127,6 +139,7 @@ export default function AppRoot() {
   function openWorldNew(worldId: WorldId) {
     const p = createProject({ worldId, origin: "home" });
     setProjects((prev) => upsertProject(prev, p));
+    setReadOnly(false);
     setState((s) => ({
       ...s,
       mode: "world",
@@ -198,6 +211,31 @@ export default function AppRoot() {
     });
   }
 
+  function copyProjectAndOpen(id: string) {
+    const p = projects.find((x) => x.id === id);
+    if (!p) return;
+
+    const t = Date.now();
+    const copy: Project = {
+      ...p,
+      id: makeId(),
+      createdAt: t,
+      updatedAt: t,
+      status: "draft",
+      title: `${p.title} (copy)`,
+      state: cloneJson(p.state),
+    };
+
+    setProjects((prev) => upsertProject(prev, copy));
+    setReadOnly(false);
+    setState((s) => ({
+      ...s,
+      mode: "world",
+      activeWorld: copy.worldId,
+      activeProjectId: copy.id,
+    }));
+  }
+
   return (
     <AppShell
       mode={state.mode}
@@ -218,9 +256,8 @@ export default function AppRoot() {
         <ProjectList
           projects={projects}
           onOpenProject={(id) => openProjectById(id)}
-          onDeleteProject={(id) =>
-            setProjects((prev) => prev.filter((p) => p.id !== id))
-          }
+          onOpenProjectReadOnly={(id) => openProjectReadOnlyById(id)}
+          onDeleteProject={(id) => setProjects((prev) => prev.filter((p) => p.id !== id))}
           onBackHome={goHome}
           onImportProjectJson={importProjectJson}
           onRenameProject={renameProject}
@@ -234,6 +271,8 @@ export default function AppRoot() {
           worldId={state.activeWorld ?? activeProject?.worldId ?? "not_sure"}
           projectId={state.activeProjectId}
           project={activeProject}
+          readOnly={readOnly}
+          onCopyProject={copyProjectAndOpen}
           onSaveProject={saveProject}
           onExitToHome={goHome}
           onDeleteActiveProject={deleteActiveProject}

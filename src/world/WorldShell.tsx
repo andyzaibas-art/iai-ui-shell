@@ -32,6 +32,8 @@ export default function WorldShell({
   worldId,
   projectId,
   project,
+  readOnly = false,
+  onCopyProject,
   onSaveProject,
   onExitToHome,
   onDeleteActiveProject,
@@ -40,6 +42,8 @@ export default function WorldShell({
   worldId: WorldId;
   projectId?: string;
   project?: Project;
+  readOnly?: boolean;
+  onCopyProject: (id: string) => void;
   onSaveProject: (p: Project) => void;
   onExitToHome: () => void;
   onDeleteActiveProject: () => void;
@@ -49,11 +53,12 @@ export default function WorldShell({
   const [showRename, setShowRename] = useState(false);
   const [renameValue, setRenameValue] = useState("");
 
+  const isRO = Boolean(readOnly);
+
   const plannerState: PlannerState =
     (project?.state?.planner as PlannerState) ?? newPlannerState();
 
-  const gameState: GameState =
-    (project?.state?.game as GameState) ?? newGameState();
+  const gameState: GameState = (project?.state?.game as GameState) ?? newGameState();
 
   const notSureState: NotSureState =
     (project?.state?.not_sure as NotSureState) ?? newNotSureState();
@@ -75,11 +80,8 @@ export default function WorldShell({
         <PlannerFlow
           value={plannerState}
           onChange={(next) => {
-            if (!project) return;
-            onSaveProject({
-              ...project,
-              state: { ...project.state, planner: next },
-            });
+            if (!project || isRO) return;
+            onSaveProject({ ...project, state: { ...project.state, planner: next } });
           }}
         />
       );
@@ -90,7 +92,7 @@ export default function WorldShell({
         <GameFlow
           value={gameState}
           onChange={(next) => {
-            if (!project) return;
+            if (!project || isRO) return;
             onSaveProject({ ...project, state: { ...project.state, game: next } });
           }}
         />
@@ -102,13 +104,13 @@ export default function WorldShell({
         <NotSureFlow
           value={notSureState}
           onChange={(next) => {
-            if (!project) return;
-            onSaveProject({
-              ...project,
-              state: { ...project.state, not_sure: next },
-            });
+            if (!project || isRO) return;
+            onSaveProject({ ...project, state: { ...project.state, not_sure: next } });
           }}
-          onChooseWorld={(target) => onSwitchWorld(target)}
+          onChooseWorld={(target) => {
+            if (isRO) return;
+            onSwitchWorld(target);
+          }}
         />
       );
     }
@@ -118,11 +120,8 @@ export default function WorldShell({
         <WritingFlow
           value={writingState}
           onChange={(next) => {
-            if (!project) return;
-            onSaveProject({
-              ...project,
-              state: { ...project.state, writing: next },
-            });
+            if (!project || isRO) return;
+            onSaveProject({ ...project, state: { ...project.state, writing: next } });
           }}
         />
       );
@@ -160,18 +159,16 @@ export default function WorldShell({
             {projectId ? `Project: ${projectId}` : "No project id"}
             {" · "}
             {statusLabel}
+            {isRO ? " · Read-only" : ""}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <button
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
             onClick={() => {
               if (!project) return;
-              onSaveProject({
-                ...project,
-                status: project.status === "done" ? "draft" : "done",
-              });
+              onSaveProject({ ...project, status: project.status === "done" ? "draft" : "done" });
             }}
             disabled={!project}
             title={status === "done" ? "Unpublish" : "Publish"}
@@ -179,18 +176,32 @@ export default function WorldShell({
             {status === "done" ? "Unpublish" : "Publish"}
           </button>
 
-          <button
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-            onClick={() => {
-              if (!project) return;
-              setRenameValue(project.title ?? "");
-              setShowRename(true);
-            }}
-            disabled={!project}
-            title="Rename"
-          >
-            Rename
-          </button>
+          {isRO ? (
+            <button
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+              onClick={() => {
+                if (!project) return;
+                onCopyProject(project.id);
+              }}
+              disabled={!project}
+              title="Copy to edit"
+            >
+              Copy
+            </button>
+          ) : (
+            <button
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+              onClick={() => {
+                if (!project) return;
+                setRenameValue(project.title ?? "");
+                setShowRename(true);
+              }}
+              disabled={!project}
+              title="Rename"
+            >
+              Rename
+            </button>
+          )}
 
           <button
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
@@ -200,13 +211,9 @@ export default function WorldShell({
                 .toLowerCase()
                 .replace(/[^a-z0-9]+/g, "_")
                 .replace(/^_+|_+$/g, "");
-              downloadJson(
-                `iai_${project.worldId}_${safeTitle}_${project.id}.json`,
-                project
-              );
+              downloadJson(`iai_${project.worldId}_${safeTitle}_${project.id}.json`, project);
             }}
             disabled={!project}
-            aria-label="Export project as JSON"
             title="Export JSON"
           >
             Export
@@ -221,9 +228,20 @@ export default function WorldShell({
         </div>
       </div>
 
-      <div className="flex-1 p-6 overflow-auto">{renderWorld()}</div>
+      <div className="flex-1 p-6 overflow-auto">
+        {isRO && (
+          <div className="mb-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">
+            Read-only preview. Use <span className="text-white">Copy</span> to create an editable draft.
+          </div>
+        )}
 
-      {showRename && (
+        <div className="relative">
+          {isRO && <div className="absolute inset-0 z-10" />}
+          <div className={isRO ? "opacity-95" : ""}>{renderWorld()}</div>
+        </div>
+      </div>
+
+      {showRename && !isRO && (
         <div className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Rename project</div>
@@ -273,7 +291,7 @@ export default function WorldShell({
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Leave this world?</div>
             <div className="mt-2 text-sm opacity-80">
-              Choose: save, delete, or stay.
+              {isRO ? "Exit preview." : "Choose: save, delete, or stay."}
             </div>
 
             <div className="mt-4 flex flex-col gap-2">
@@ -284,19 +302,21 @@ export default function WorldShell({
                   onExitToHome();
                 }}
               >
-                Save and exit
+                {isRO ? "Exit" : "Save and exit"}
               </button>
 
-              <button
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={() => {
-                  onDeleteActiveProject();
-                  setShowExit(false);
-                  onExitToHome();
-                }}
-              >
-                Delete and start over
-              </button>
+              {!isRO && (
+                <button
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                  onClick={() => {
+                    onDeleteActiveProject();
+                    setShowExit(false);
+                    onExitToHome();
+                  }}
+                >
+                  Delete and start over
+                </button>
+              )}
 
               <button
                 className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
