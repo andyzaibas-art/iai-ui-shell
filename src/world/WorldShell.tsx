@@ -14,10 +14,10 @@ import { WritingState, newWritingState } from "../worlds/writing/writingModel";
 import { WorldId } from "../app/modes";
 import { WORLD_CATALOG } from "../app/worldCatalog";
 
+type Modal = "exit" | "rename" | "publish" | null;
+
 function downloadJson(filename: string, data: unknown) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], {
-    type: "application/json",
-  });
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -49,11 +49,10 @@ export default function WorldShell({
   onDeleteActiveProject: () => void;
   onSwitchWorld: (worldId: WorldId) => void;
 }) {
-  const [showExit, setShowExit] = useState(false);
-  const [showRename, setShowRename] = useState(false);
+  const [modal, setModal] = useState<Modal>(null);
+
   const [renameValue, setRenameValue] = useState("");
 
-  const [showPublish, setShowPublish] = useState(false);
   const [coverEmoji, setCoverEmoji] = useState("");
   const [blurb, setBlurb] = useState("");
 
@@ -62,7 +61,8 @@ export default function WorldShell({
   const plannerState: PlannerState =
     (project?.state?.planner as PlannerState) ?? newPlannerState();
 
-  const gameState: GameState = (project?.state?.game as GameState) ?? newGameState();
+  const gameState: GameState =
+    (project?.state?.game as GameState) ?? newGameState();
 
   const notSureState: NotSureState =
     (project?.state?.not_sure as NotSureState) ?? newNotSureState();
@@ -77,6 +77,23 @@ export default function WorldShell({
   const title = useMemo(() => {
     return project?.title ? `${baseLabel} — ${project.title}` : baseLabel;
   }, [baseLabel, project?.title]);
+
+  function openExit() {
+    setModal("exit");
+  }
+
+  function openRename() {
+    if (!project || isRO) return;
+    setRenameValue(project.title ?? "");
+    setModal("rename");
+  }
+
+  function openPublishSettings() {
+    if (!project || isRO) return;
+    setCoverEmoji(project.publish?.coverEmoji ?? "");
+    setBlurb(project.publish?.blurb ?? "");
+    setModal("publish");
+  }
 
   function renderWorld() {
     if (worldId === "planner") {
@@ -182,12 +199,7 @@ export default function WorldShell({
 
           <button
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-            onClick={() => {
-              if (!project || isRO) return;
-              setCoverEmoji(project.publish?.coverEmoji ?? "");
-              setBlurb(project.publish?.blurb ?? "");
-              setShowPublish(true);
-            }}
+            onClick={openPublishSettings}
             disabled={!project || isRO}
             title="Publish settings"
           >
@@ -209,11 +221,7 @@ export default function WorldShell({
           ) : (
             <button
               className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-              onClick={() => {
-                if (!project) return;
-                setRenameValue(project.title ?? "");
-                setShowRename(true);
-              }}
+              onClick={openRename}
               disabled={!project}
               title="Rename"
             >
@@ -239,7 +247,7 @@ export default function WorldShell({
 
           <button
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-            onClick={() => setShowExit(true)}
+            onClick={openExit}
           >
             Exit
           </button>
@@ -259,14 +267,13 @@ export default function WorldShell({
         </div>
       </div>
 
-      {showPublish && !isRO && (
+      {/* PUBLISH SETTINGS (single-modal system) */}
+      {modal === "publish" && !isRO && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowPublish(false)} />
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setModal(null)} />
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Publish settings</div>
-            <div className="mt-2 text-sm opacity-80">
-              Optional metadata for Gallery cards.
-            </div>
+            <div className="mt-2 text-sm opacity-80">Optional metadata for Gallery cards.</div>
 
             <div className="mt-4 space-y-3">
               <div>
@@ -277,9 +284,7 @@ export default function WorldShell({
                   onChange={(e) => setCoverEmoji(e.target.value)}
                   placeholder="😀"
                 />
-                <div className="mt-1 text-xs opacity-60">
-                  Tip: use a single emoji. We’ll use world icon if empty.
-                </div>
+                <div className="mt-1 text-xs opacity-60">Tip: use a single emoji.</div>
               </div>
 
               <div>
@@ -305,7 +310,7 @@ export default function WorldShell({
                       blurb: blurb.trim() || undefined,
                     },
                   });
-                  setShowPublish(false);
+                  setModal(null);
                 }}
               >
                 Save settings
@@ -313,7 +318,7 @@ export default function WorldShell({
 
               <button
                 className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={() => setShowPublish(false)}
+                onClick={() => setModal(null)}
               >
                 Cancel
               </button>
@@ -322,14 +327,13 @@ export default function WorldShell({
         </div>
       )}
 
-      {showRename && !isRO && (
+      {/* RENAME */}
+      {modal === "rename" && !isRO && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowRename(false)} />
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setModal(null)} />
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Rename project</div>
-            <div className="mt-2 text-sm opacity-80">
-              Change the title. It will persist in My projects.
-            </div>
+            <div className="mt-2 text-sm opacity-80">Change the title. It will persist in My projects.</div>
 
             <input
               className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
@@ -347,7 +351,7 @@ export default function WorldShell({
                   const t = renameValue.trim();
                   if (!t) return;
                   onSaveProject({ ...project, title: t });
-                  setShowRename(false);
+                  setModal(null);
                   setRenameValue("");
                 }}
               >
@@ -357,7 +361,7 @@ export default function WorldShell({
               <button
                 className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
                 onClick={() => {
-                  setShowRename(false);
+                  setModal(null);
                   setRenameValue("");
                 }}
               >
@@ -368,20 +372,19 @@ export default function WorldShell({
         </div>
       )}
 
-      {showExit && (
+      {/* EXIT */}
+      {modal === "exit" && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowExit(false)} />
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setModal(null)} />
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Leave this world?</div>
-            <div className="mt-2 text-sm opacity-80">
-              {isRO ? "Exit preview." : "Choose: save, delete, or stay."}
-            </div>
+            <div className="mt-2 text-sm opacity-80">{isRO ? "Exit preview." : "Choose: save, delete, or stay."}</div>
 
             <div className="mt-4 flex flex-col gap-2">
               <button
                 className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
                 onClick={() => {
-                  setShowExit(false);
+                  setModal(null);
                   onExitToHome();
                 }}
               >
@@ -393,7 +396,7 @@ export default function WorldShell({
                   className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
                   onClick={() => {
                     onDeleteActiveProject();
-                    setShowExit(false);
+                    setModal(null);
                     onExitToHome();
                   }}
                 >
@@ -403,7 +406,7 @@ export default function WorldShell({
 
               <button
                 className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={() => setShowExit(false)}
+                onClick={() => setModal(null)}
               >
                 Cancel
               </button>
