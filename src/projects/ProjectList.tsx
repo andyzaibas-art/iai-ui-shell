@@ -50,6 +50,13 @@ type ViewMode = "list" | "gallery";
 type PreviewTab = "summary" | "json";
 type Toast = { msg: string; at: number } | null;
 
+// Single modal state (prevents overlap)
+type Modal =
+  | { kind: "preview"; id: string }
+  | { kind: "delete"; id: string }
+  | { kind: "import_code" }
+  | null;
+
 // --- Local share codes (localStorage) ---
 const SHARE_KEY = "iai_ui_share_codes_v1";
 type ShareRecord = { project: Project; createdAt: number };
@@ -82,7 +89,7 @@ function normalizeCode(input: string) {
 }
 
 function randomChars(len: number) {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid I/O/1/0 confusion
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const out: string[] = [];
   try {
     const arr = new Uint32Array(len);
@@ -100,7 +107,6 @@ function generateCode(existing: Record<string, ShareRecord>) {
     const code = `${raw.slice(0, 4)}-${raw.slice(4)}`;
     if (!existing[code]) return code;
   }
-  // fallback
   const raw = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase();
   return normalizeCode(raw);
 }
@@ -246,11 +252,9 @@ export default function ProjectList({
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
 
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [modal, setModal] = useState<Modal>(null);
   const [previewTab, setPreviewTab] = useState<PreviewTab>("summary");
 
-  const [showImportCode, setShowImportCode] = useState(false);
   const [importCodeValue, setImportCodeValue] = useState("");
 
   const [toast, setToast] = useState<Toast>(null);
@@ -280,6 +284,24 @@ export default function ProjectList({
     await toastMsg(ok ? `${label} copied` : `Copy failed`);
   }
 
+  function openPreview(id: string) {
+    setPreviewTab("summary");
+    setModal({ kind: "preview", id });
+  }
+
+  function openDelete(id: string) {
+    setModal({ kind: "delete", id });
+  }
+
+  function openImportCode() {
+    setImportCodeValue("");
+    setModal({ kind: "import_code" });
+  }
+
+  function closeModal() {
+    setModal(null);
+  }
+
   function importFromCode() {
     const code = normalizeCode(importCodeValue);
     if (!code || code.length < 4) {
@@ -292,7 +314,6 @@ export default function ProjectList({
       return;
     }
 
-    // Import as a new editable draft copy
     const t = Date.now();
     const sharedCopy: any = {
       ...p,
@@ -304,7 +325,7 @@ export default function ProjectList({
     };
 
     onImportProjectJson(sharedCopy);
-    setShowImportCode(false);
+    closeModal();
     setImportCodeValue("");
     void toastMsg(`Imported from code: ${code}`);
   }
@@ -332,7 +353,7 @@ export default function ProjectList({
     arr.sort((a, b) => {
       const ap = pinnedSet.has(a.id);
       const bp = pinnedSet.has(b.id);
-      if (ap !== bp) return ap ? -1 : 1; // pinned first
+      if (ap !== bp) return ap ? -1 : 1;
 
       if (sortMode === "title") return a.title.localeCompare(b.title);
       if (sortMode === "recent") return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
@@ -349,18 +370,18 @@ export default function ProjectList({
   }, [filtered, pinnedIds, pinnedSet, sortMode]);
 
   const deleteProject = useMemo(() => {
-    if (!deleteId) return null;
-    return projects.find((p) => p.id === deleteId) ?? null;
-  }, [projects, deleteId]);
+    if (!modal || modal.kind !== "delete") return null;
+    return projects.find((p) => p.id === modal.id) ?? null;
+  }, [projects, modal]);
 
   const previewProject = useMemo(() => {
-    if (!previewId) return null;
-    return projects.find((p) => p.id === previewId) ?? null;
-  }, [projects, previewId]);
+    if (!modal || modal.kind !== "preview") return null;
+    return projects.find((p) => p.id === modal.id) ?? null;
+  }, [projects, modal]);
 
   useEffect(() => {
-    if (previewId && !previewProject) setPreviewId(null);
-  }, [previewId, previewProject]);
+    if (modal?.kind === "preview" && !previewProject) closeModal();
+  }, [modal, previewProject]);
 
   const previewJson = useMemo(() => {
     if (!previewProject) return "";
@@ -406,7 +427,7 @@ export default function ProjectList({
 
           <button
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-            onClick={() => setShowImportCode(true)}
+            onClick={openImportCode}
             title="Import from local share code"
           >
             Import code
@@ -550,7 +571,7 @@ export default function ProjectList({
                           Rename
                         </button>
 
-                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => setDeleteId(p.id)}>
+                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => openDelete(p.id)}>
                           Delete
                         </button>
                       </div>
@@ -631,10 +652,7 @@ export default function ProjectList({
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <button
                       className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
-                      onClick={() => {
-                        setPreviewId(p.id);
-                        setPreviewTab("summary");
-                      }}
+                      onClick={() => openPreview(p.id)}
                     >
                       Preview
                     </button>
@@ -662,9 +680,10 @@ export default function ProjectList({
         )}
       </div>
 
-      {previewId && previewProject && (
+      {/* PREVIEW MODAL */}
+      {modal?.kind === "preview" && previewProject && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85" onClick={() => setPreviewId(null)} />
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
           <div className="relative w-full max-w-3xl rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -723,7 +742,7 @@ export default function ProjectList({
                   className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
                   onClick={() => {
                     const id = previewProject.id;
-                    setPreviewId(null);
+                    closeModal();
                     onOpenProjectReadOnly(id);
                   }}
                   title="Open read-only"
@@ -735,7 +754,7 @@ export default function ProjectList({
                   className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
                   onClick={() => {
                     const id = previewProject.id;
-                    setPreviewId(null);
+                    closeModal();
                     onOpenProject(id);
                   }}
                   title="Open editable"
@@ -743,7 +762,7 @@ export default function ProjectList({
                   Edit
                 </button>
 
-                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => setPreviewId(null)}>
+                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={closeModal}>
                   Close
                 </button>
               </div>
@@ -776,9 +795,10 @@ export default function ProjectList({
         </div>
       )}
 
-      {showImportCode && (
+      {/* IMPORT CODE MODAL */}
+      {modal?.kind === "import_code" && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85" onClick={() => setShowImportCode(false)} />
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Import from code</div>
             <div className="mt-2 text-sm opacity-80">
@@ -794,17 +814,11 @@ export default function ProjectList({
             />
 
             <div className="mt-4 flex flex-col gap-2">
-              <button
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={importFromCode}
-              >
+              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={importFromCode}>
                 Import
               </button>
 
-              <button
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={() => setShowImportCode(false)}
-              >
+              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={closeModal}>
                 Cancel
               </button>
             </div>
@@ -812,9 +826,10 @@ export default function ProjectList({
         </div>
       )}
 
-      {deleteId && (
+      {/* DELETE CONFIRM MODAL */}
+      {modal?.kind === "delete" && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85" onClick={() => setDeleteId(null)} />
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Delete project?</div>
             <div className="mt-2 text-sm opacity-80">
@@ -826,19 +841,15 @@ export default function ProjectList({
               <button
                 className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
                 onClick={() => {
-                  const id = deleteId;
-                  setDeleteId(null);
-                  if (!id) return;
+                  const id = modal.id;
+                  closeModal();
                   onDeleteProject(id);
                 }}
               >
                 Delete
               </button>
 
-              <button
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={() => setDeleteId(null)}
-              >
+              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={closeModal}>
                 Cancel
               </button>
             </div>
