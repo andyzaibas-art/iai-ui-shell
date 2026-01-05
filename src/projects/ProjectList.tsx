@@ -664,7 +664,7 @@ export default function ProjectList({
 
       {previewId && previewProject && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setPreviewId(null)} />
+          <div className="absolute inset-0 bg-black/85" onClick={() => setPreviewId(null)} />
           <div className="relative w-full max-w-3xl rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -677,7 +677,7 @@ export default function ProjectList({
                 </div>
               </div>
 
-              <div className="flex gap-2 flex-wrap justify-end">
+              <div className="flex gap-2 flex-wrap justify-end text-xs">
                 <button
                   className={`rounded-xl border border-white/10 px-3 py-2 ${previewTab === "summary" ? "bg-white/10" : "bg-white/5"}`}
                   onClick={() => setPreviewTab("summary")}
@@ -778,7 +778,7 @@ export default function ProjectList({
 
       {showImportCode && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowImportCode(false)} />
+          <div className="absolute inset-0 bg-black/85" onClick={() => setShowImportCode(false)} />
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Import from code</div>
             <div className="mt-2 text-sm opacity-80">
@@ -814,7 +814,7 @@ export default function ProjectList({
 
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setDeleteId(null)} />
+          <div className="absolute inset-0 bg-black/85" onClick={() => setDeleteId(null)} />
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Delete project?</div>
             <div className="mt-2 text-sm opacity-80">
