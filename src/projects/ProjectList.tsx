@@ -434,7 +434,9 @@ export default function ProjectList({
               return (
                 <div key={p.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
                   <div className="flex items-center gap-2">
-                    {meta?.iconSrc ? (
+                    {(p.publish?.coverEmoji && p.publish.coverEmoji.trim()) ? (
+                      <span className="text-2xl">{p.publish.coverEmoji.trim().slice(0,2)}</span>
+                    ) : meta?.iconSrc ? (
                       <img src={meta.iconSrc} alt="" className="w-7 h-7 opacity-90" draggable={false} />
                     ) : (
                       <span className="text-xl">{meta?.iconText ?? "⬚"}</span>
