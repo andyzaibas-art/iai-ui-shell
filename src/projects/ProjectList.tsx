@@ -18,9 +18,7 @@ function hm(isoLocal?: string) {
 }
 
 function downloadJson(filename: string, data: unknown) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], {
-    type: "application/json",
-  });
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -51,12 +49,10 @@ function exportProject(p: Project) {
 function previewSummaryLines(p: Project): string[] {
   const lines: string[] = [];
 
-  // Game
   const game: any = (p.state as any)?.game;
   if (game && typeof game === "object") {
     const isGenerated = Boolean(game.story);
-    const draftTitle =
-      typeof game.draft?.title === "string" ? game.draft.title.trim() : "";
+    const draftTitle = typeof game.draft?.title === "string" ? game.draft.title.trim() : "";
     const hist = Array.isArray(game.history) ? game.history : [];
     const lastChoices = hist
       .slice(-3)
@@ -69,7 +65,6 @@ function previewSummaryLines(p: Project): string[] {
     return lines;
   }
 
-  // Planner
   const planner: any = (p.state as any)?.planner;
   if (planner && typeof planner === "object") {
     const variants = planner.variants;
@@ -96,7 +91,6 @@ function previewSummaryLines(p: Project): string[] {
     return lines;
   }
 
-  // Writing
   const writing: any = (p.state as any)?.writing;
   if (writing && typeof writing === "object") {
     const candidates = [
@@ -126,6 +120,7 @@ function previewSummaryLines(p: Project): string[] {
 export default function ProjectList({
   projects,
   onOpenProject,
+  onOpenProjectReadOnly,
   onDeleteProject,
   onBackHome,
   onImportProjectJson,
@@ -135,6 +130,7 @@ export default function ProjectList({
 }: {
   projects: Project[];
   onOpenProject: (id: string) => void;
+  onOpenProjectReadOnly: (id: string) => void;
   onDeleteProject: (id: string) => void;
   onBackHome: () => void;
   onImportProjectJson: (raw: unknown) => void;
@@ -430,7 +426,6 @@ export default function ProjectList({
             })}
           </div>
         ) : (
-          // Gallery view
           <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
             {filtered.map((p) => {
               const meta = WORLD_CATALOG[p.worldId];
@@ -499,7 +494,6 @@ export default function ProjectList({
         )}
       </div>
 
-      {/* Preview modal */}
       {previewId && previewProject && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setPreviewId(null)} />
@@ -510,6 +504,8 @@ export default function ProjectList({
                 <div className="text-xs opacity-70 truncate">
                   {(WORLD_CATALOG[previewProject.worldId]?.label ?? previewProject.worldId)} ·{" "}
                   {fmt(previewProject.updatedAt)} · {statusLabel(previewProject.status)}
+                  {" · "}
+                  Read-only open available
                 </div>
               </div>
 
@@ -541,11 +537,22 @@ export default function ProjectList({
                   onClick={() => {
                     const id = previewProject.id;
                     setPreviewId(null);
+                    onOpenProjectReadOnly(id);
+                  }}
+                  title="Open read-only"
+                >
+                  Open (RO)
+                </button>
+                <button
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+                  onClick={() => {
+                    const id = previewProject.id;
+                    setPreviewId(null);
                     onOpenProject(id);
                   }}
                   title="Open editable"
                 >
-                  Open
+                  Edit
                 </button>
                 <button
                   className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
@@ -559,7 +566,7 @@ export default function ProjectList({
             {previewTab === "summary" ? (
               <div className="mt-4 space-y-2">
                 <div className="text-xs opacity-60">
-                  Human preview (v0.4). Switch to JSON for full data.
+                  Human preview (v0.4). Open (RO) disables interaction; Copy in header makes an editable draft.
                 </div>
                 <div className="rounded-xl border border-white/15 bg-black/30 p-4 text-sm">
                   {previewLines.map((l, i) => (
@@ -583,7 +590,6 @@ export default function ProjectList({
         </div>
       )}
 
-      {/* Delete confirm */}
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setDeleteId(null)} />
