@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Project, type ProjectStatus } from "./ProjectStore";
 import { WORLD_CATALOG, WORLD_DEFAULT_ORDER } from "../app/worldCatalog";
 import type { WorldId } from "../app/modes";
+import {
+  useUiPrefs,
+  togglePinnedProject,
+  setGallerySort,
+  type GallerySort,
+} from "../app/stores/UiPrefsStore";
 
 function fmt(ts: number) {
   try {
@@ -138,6 +144,12 @@ export default function ProjectList({
   onDuplicateProject: (id: string) => void;
   onSetStatus: (id: string, status: ProjectStatus) => void;
 }) {
+  const ui = useUiPrefs();
+  const pinnedIds = ui.pinnedProjectIds ?? [];
+  const sortMode: GallerySort = ui.gallerySort ?? "pinned_recent";
+
+  const pinnedSet = useMemo(() => new Set(pinnedIds), [pinnedIds]);
+
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const [renameId, setRenameId] = useState<string | null>(null);
@@ -177,6 +189,36 @@ export default function ProjectList({
     });
   }, [projects, q, worldFilter, effectiveStatus]);
 
+  const sorted = useMemo(() => {
+    const idx = new Map<string, number>();
+    pinnedIds.forEach((id, i) => idx.set(id, i));
+
+    const arr = filtered.slice();
+    arr.sort((a, b) => {
+      const ap = pinnedSet.has(a.id);
+      const bp = pinnedSet.has(b.id);
+      if (ap !== bp) return bp ? 1 : -1; // pinned first
+
+      if (sortMode === "title") {
+        return a.title.localeCompare(b.title);
+      }
+
+      if (sortMode === "recent") {
+        return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+      }
+
+      // pinned_recent (default)
+      if (ap && bp) {
+        const ai = idx.get(a.id) ?? 999999;
+        const bi = idx.get(b.id) ?? 999999;
+        if (ai !== bi) return ai - bi; // pinned order
+      }
+      return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+    });
+
+    return arr;
+  }, [filtered, pinnedIds, pinnedSet, sortMode]);
+
   const deleteProject = useMemo(() => {
     if (!deleteId) return null;
     return projects.find((p) => p.id === deleteId) ?? null;
@@ -204,6 +246,8 @@ export default function ProjectList({
     if (!previewProject) return [];
     return previewSummaryLines(previewProject);
   }, [previewProject]);
+
+  const previewPinned = previewProject ? pinnedSet.has(previewProject.id) : false;
 
   return (
     <div className="h-full flex flex-col">
@@ -274,6 +318,17 @@ export default function ProjectList({
             <option value="done">Published</option>
           </select>
 
+          <select
+            className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
+            value={sortMode}
+            onChange={(e) => setGallerySort(e.target.value as GallerySort)}
+            title="Sort"
+          >
+            <option value="pinned_recent">Pinned → Recent</option>
+            <option value="recent">Recent</option>
+            <option value="title">Title A–Z</option>
+          </select>
+
           <div className="flex gap-2">
             <button
               className={`rounded-xl border border-white/10 px-3 py-2 ${
@@ -306,8 +361,9 @@ export default function ProjectList({
         </div>
 
         <div className="mt-2 text-xs text-white/60">
-          Showing {filtered.length} of {projects.length}
+          Showing {sorted.length} of {projects.length}
           {view === "gallery" ? " (Published only)" : ""}
+          {pinnedIds.length ? ` · Pinned: ${pinnedIds.length}` : ""}
         </div>
       </div>
 
@@ -316,7 +372,7 @@ export default function ProjectList({
           <div className="opacity-80">
             No projects yet. Open a world from Home to create one, or import a JSON.
           </div>
-        ) : filtered.length === 0 ? (
+        ) : sorted.length === 0 ? (
           <div className="opacity-80">
             {view === "gallery"
               ? "No published projects yet. Publish one from List view."
@@ -324,15 +380,18 @@ export default function ProjectList({
           </div>
         ) : view === "list" ? (
           <div className="space-y-3">
-            {filtered.map((p) => {
+            {sorted.map((p) => {
               const worldLabel = WORLD_CATALOG[p.worldId]?.label ?? p.worldId;
               const isRenaming = renameId === p.id;
+              const isPinned = pinnedSet.has(p.id);
 
               return (
                 <div key={p.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
                   {!isRenaming ? (
                     <>
-                      <div className="font-semibold">{p.title}</div>
+                      <div className="font-semibold">
+                        {isPinned ? "📌 " : ""}{p.title}
+                      </div>
                       <div className="text-sm opacity-70">
                         {worldLabel} · {statusLabel(p.status)} · {fmt(p.updatedAt)}
                       </div>
@@ -343,6 +402,14 @@ export default function ProjectList({
                           onClick={() => onOpenProject(p.id)}
                         >
                           Continue
+                        </button>
+
+                        <button
+                          className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
+                          onClick={() => togglePinnedProject(p.id)}
+                          title={isPinned ? "Unpin" : "Pin"}
+                        >
+                          {isPinned ? "Unpin" : "Pin"}
                         </button>
 
                         <button
@@ -427,25 +494,35 @@ export default function ProjectList({
           </div>
         ) : (
           <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
-            {filtered.map((p) => {
+            {sorted.map((p) => {
               const meta = WORLD_CATALOG[p.worldId];
               const worldLabel = meta?.label ?? p.worldId;
+              const isPinned = pinnedSet.has(p.id);
 
               return (
                 <div key={p.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
                   <div className="flex items-center gap-2">
                     {(p.publish?.coverEmoji && p.publish.coverEmoji.trim()) ? (
-                      <span className="text-2xl">{p.publish.coverEmoji.trim().slice(0,2)}</span>
+                      <span className="text-2xl">{p.publish.coverEmoji.trim().slice(0, 2)}</span>
                     ) : meta?.iconSrc ? (
                       <img src={meta.iconSrc} alt="" className="w-7 h-7 opacity-90" draggable={false} />
                     ) : (
                       <span className="text-xl">{meta?.iconText ?? "⬚"}</span>
                     )}
+
                     <div className="min-w-0">
-                      <div className="font-semibold truncate">{p.title}</div>
+                      <div className="font-semibold truncate">
+                        {isPinned ? "📌 " : ""}{p.title}
+                      </div>
                       <div className="text-xs opacity-70 truncate">
                         {worldLabel} · {fmt(p.updatedAt)}
                       </div>
+
+                      {p.publish?.blurb && p.publish.blurb.trim() ? (
+                        <div className="mt-2 text-sm text-white/70 line-clamp-3">
+                          {p.publish.blurb.trim()}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
@@ -458,6 +535,14 @@ export default function ProjectList({
                       }}
                     >
                       Preview
+                    </button>
+
+                    <button
+                      className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
+                      onClick={() => togglePinnedProject(p.id)}
+                      title={isPinned ? "Unpin" : "Pin"}
+                    >
+                      {isPinned ? "Unpin" : "Pin"}
                     </button>
 
                     <button
@@ -507,7 +592,7 @@ export default function ProjectList({
                   {(WORLD_CATALOG[previewProject.worldId]?.label ?? previewProject.worldId)} ·{" "}
                   {fmt(previewProject.updatedAt)} · {statusLabel(previewProject.status)}
                   {" · "}
-                  Read-only open available
+                  {previewPinned ? "Pinned" : "Not pinned"}
                 </div>
               </div>
 
@@ -528,12 +613,21 @@ export default function ProjectList({
                 >
                   JSON
                 </button>
+
+                <button
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+                  onClick={() => togglePinnedProject(previewProject.id)}
+                >
+                  {previewPinned ? "Unpin" : "Pin"}
+                </button>
+
                 <button
                   className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
                   onClick={() => exportProject(previewProject)}
                 >
                   Export
                 </button>
+
                 <button
                   className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
                   onClick={() => {
@@ -545,6 +639,7 @@ export default function ProjectList({
                 >
                   Open (RO)
                 </button>
+
                 <button
                   className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
                   onClick={() => {
@@ -556,6 +651,7 @@ export default function ProjectList({
                 >
                   Edit
                 </button>
+
                 <button
                   className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
                   onClick={() => setPreviewId(null)}
@@ -568,7 +664,7 @@ export default function ProjectList({
             {previewTab === "summary" ? (
               <div className="mt-4 space-y-2">
                 <div className="text-xs opacity-60">
-                  Human preview (v0.4). Open (RO) disables interaction; Copy in header makes an editable draft.
+                  Human preview. Switch to JSON for full data.
                 </div>
                 <div className="rounded-xl border border-white/15 bg-black/30 p-4 text-sm">
                   {previewLines.map((l, i) => (
