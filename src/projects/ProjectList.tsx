@@ -55,6 +55,7 @@ type Modal =
   | { kind: "preview"; id: string }
   | { kind: "delete"; id: string }
   | { kind: "import_code" }
+  | { kind: "import_string" }
   | null;
 
 // --- Local share codes (localStorage) ---
@@ -136,6 +137,51 @@ function getShare(codeInput: string): Project | null {
   if (!code || code.length < 4) return null;
   const map = loadShareMap();
   return map[code]?.project ?? null;
+}
+
+// --- Portable share string (copy/paste across devices) ---
+const SHARE_STR_PREFIX = "IAI1:";
+
+function bytesToB64Url(bytes: Uint8Array): string {
+  let bin = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    const slice = bytes.subarray(i, i + chunk);
+    bin += String.fromCharCode(...slice);
+  }
+  const b64 = btoa(bin);
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function b64UrlToBytes(s: string): Uint8Array | null {
+  try {
+    const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4);
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+function encodeShareString(project: Project): string {
+  const json = JSON.stringify(project);
+  const bytes = new TextEncoder().encode(json);
+  return SHARE_STR_PREFIX + bytesToB64Url(bytes);
+}
+
+function decodeShareString(input: string): unknown | null {
+  const raw = (input ?? "").trim();
+  const s = raw.startsWith(SHARE_STR_PREFIX) ? raw.slice(SHARE_STR_PREFIX.length) : raw;
+  const bytes = b64UrlToBytes(s);
+  if (!bytes) return null;
+  try {
+    const json = new TextDecoder().decode(bytes);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
 }
 
 function statusLabel(s: ProjectStatus) {
@@ -256,6 +302,7 @@ export default function ProjectList({
   const [previewTab, setPreviewTab] = useState<PreviewTab>("summary");
 
   const [importCodeValue, setImportCodeValue] = useState("");
+  const [importStringValue, setImportStringValue] = useState("");
 
   const [toast, setToast] = useState<Toast>(null);
 
@@ -298,6 +345,11 @@ export default function ProjectList({
     setModal({ kind: "import_code" });
   }
 
+  function openImportString() {
+    setImportStringValue("");
+    setModal({ kind: "import_string" });
+  }
+
   function closeModal() {
     setModal(null);
   }
@@ -326,8 +378,28 @@ export default function ProjectList({
 
     onImportProjectJson(sharedCopy);
     closeModal();
-    setImportCodeValue("");
     void toastMsg(`Imported from code: ${code}`);
+  }
+
+  function importFromString() {
+    const decoded = decodeShareString(importStringValue);
+    if (!decoded || typeof decoded !== "object") {
+      void toastMsg("Invalid share string");
+      return;
+    }
+    const o: any = decoded;
+    const t = Date.now();
+    const imported: any = {
+      ...o,
+      id: "",
+      createdAt: t,
+      updatedAt: t,
+      status: "draft",
+      title: `${(typeof o.title === "string" && o.title.trim()) ? o.title.trim() : "Shared project"} (shared)`,
+    };
+    onImportProjectJson(imported);
+    closeModal();
+    void toastMsg("Imported from share string");
   }
 
   const effectiveStatus: StatusFilter = view === "gallery" ? "done" : statusFilter;
@@ -418,25 +490,19 @@ export default function ProjectList({
             }}
           />
 
-          <button
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-            onClick={() => fileRef.current?.click()}
-          >
+          <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => fileRef.current?.click()}>
             Import file
           </button>
 
-          <button
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-            onClick={openImportCode}
-            title="Import from local share code"
-          >
+          <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={openImportCode}>
             Import code
           </button>
 
-          <button
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-            onClick={onBackHome}
-          >
+          <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={openImportString} title="Paste from another device">
+            Import string
+          </button>
+
+          <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={onBackHome}>
             Home
           </button>
         </div>
@@ -469,7 +535,6 @@ export default function ProjectList({
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
             disabled={view === "gallery"}
-            title={view === "gallery" ? "Gallery shows Published only" : "Status filter"}
           >
             <option value="all">All status</option>
             <option value="draft">Draft</option>
@@ -480,7 +545,6 @@ export default function ProjectList({
             className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
             value={sortMode}
             onChange={(e) => setGallerySort(e.target.value as GallerySort)}
-            title="Sort"
           >
             <option value="pinned_recent">Pinned → Recent</option>
             <option value="recent">Recent</option>
@@ -488,16 +552,10 @@ export default function ProjectList({
           </select>
 
           <div className="flex gap-2">
-            <button
-              className={`rounded-xl border border-white/10 px-3 py-2 ${view === "list" ? "bg-white/10" : "bg-white/5"}`}
-              onClick={() => setView("list")}
-            >
+            <button className={`rounded-xl border border-white/10 px-3 py-2 ${view === "list" ? "bg-white/10" : "bg-white/5"}`} onClick={() => setView("list")}>
               List
             </button>
-            <button
-              className={`rounded-xl border border-white/10 px-3 py-2 ${view === "gallery" ? "bg-white/10" : "bg-white/5"}`}
-              onClick={() => setView("gallery")}
-            >
+            <button className={`rounded-xl border border-white/10 px-3 py-2 ${view === "gallery" ? "bg-white/10" : "bg-white/5"}`} onClick={() => setView("gallery")}>
               Gallery
             </button>
             <button
@@ -523,101 +581,10 @@ export default function ProjectList({
 
       <div className="flex-1 p-6 overflow-auto">
         {projects.length === 0 ? (
-          <div className="opacity-80">
-            No projects yet. Open a world from Home to create one, or import a file/code.
-          </div>
+          <div className="opacity-80">No projects yet. Open a world from Home to create one, or import a file/code/string.</div>
         ) : sorted.length === 0 ? (
-          <div className="opacity-80">
-            {view === "gallery" ? "No published projects yet. Publish one from List view." : "No matches."}
-          </div>
-        ) : view === "list" ? (
-          <div className="space-y-3">
-            {sorted.map((p) => {
-              const worldLabel = WORLD_CATALOG[p.worldId]?.label ?? p.worldId;
-              const isRenaming = renameId === p.id;
-              const isPinned = pinnedSet.has(p.id);
-
-              return (
-                <div key={p.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  {!isRenaming ? (
-                    <>
-                      <div className="font-semibold">{isPinned ? "📌 " : ""}{p.title}</div>
-                      <div className="text-sm opacity-70">
-                        {worldLabel} · {statusLabel(p.status)} · {fmt(p.updatedAt)}
-                      </div>
-
-                      <div className="mt-3 flex gap-2 flex-wrap">
-                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => onOpenProject(p.id)}>
-                          Continue
-                        </button>
-
-                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => togglePinnedProject(p.id)}>
-                          {isPinned ? "Unpin" : "Pin"}
-                        </button>
-
-                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => onSetStatus(p.id, p.status === "done" ? "draft" : "done")}>
-                          {p.status === "done" ? "Unpublish" : "Publish"}
-                        </button>
-
-                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => onDuplicateProject(p.id)}>
-                          Duplicate
-                        </button>
-
-                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => exportProject(p)}>
-                          Export
-                        </button>
-
-                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => { setRenameId(p.id); setRenameValue(p.title); }}>
-                          Rename
-                        </button>
-
-                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => openDelete(p.id)}>
-                          Delete
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-sm opacity-70 mb-2">Rename project</div>
-                      <input
-                        className="w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
-                        value={renameValue}
-                        onChange={(e) => setRenameValue(e.target.value)}
-                        placeholder="Project title…"
-                        autoFocus
-                      />
-
-                      <div className="mt-3 flex gap-2 flex-wrap">
-                        <button
-                          className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
-                          onClick={() => {
-                            const t = renameValue.trim();
-                            if (!t) return;
-                            onRenameProject(p.id, t);
-                            setRenameId(null);
-                            setRenameValue("");
-                          }}
-                        >
-                          Save
-                        </button>
-
-                        <button
-                          className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
-                          onClick={() => {
-                            setRenameId(null);
-                            setRenameValue("");
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
+          <div className="opacity-80">{view === "gallery" ? "No published projects yet." : "No matches."}</div>
+        ) : view === "gallery" ? (
           <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
             {sorted.map((p) => {
               const meta = WORLD_CATALOG[p.worldId];
@@ -637,42 +604,58 @@ export default function ProjectList({
 
                     <div className="min-w-0">
                       <div className="font-semibold truncate">{isPinned ? "📌 " : ""}{p.title}</div>
-                      <div className="text-xs opacity-70 truncate">
-                        {worldLabel} · {fmt(p.updatedAt)}
-                      </div>
-
+                      <div className="text-xs opacity-70 truncate">{worldLabel} · {fmt(p.updatedAt)}</div>
                       {p.publish?.blurb && p.publish.blurb.trim() ? (
-                        <div className="mt-2 text-sm text-white/70 line-clamp-3">
-                          {p.publish.blurb.trim()}
-                        </div>
+                        <div className="mt-2 text-sm text-white/70 line-clamp-3">{p.publish.blurb.trim()}</div>
                       ) : null}
                     </div>
                   </div>
 
                   <div className="mt-3 flex gap-2 flex-wrap">
-                    <button
-                      className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
-                      onClick={() => openPreview(p.id)}
-                    >
-                      Preview
-                    </button>
-
-                    <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => togglePinnedProject(p.id)}>
-                      {isPinned ? "Unpin" : "Pin"}
-                    </button>
-
-                    <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => exportProject(p)}>
-                      Export
-                    </button>
-
-                    <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => onDuplicateProject(p.id)}>
-                      Copy
-                    </button>
-
-                    <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => onSetStatus(p.id, "draft")} title="Unpublish">
-                      Unpublish
-                    </button>
+                    <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => openPreview(p.id)}>Preview</button>
+                    <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => togglePinnedProject(p.id)}>{isPinned ? "Unpin" : "Pin"}</button>
+                    <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => exportProject(p)}>Export</button>
+                    <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => onDuplicateProject(p.id)}>Copy</button>
+                    <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => onSetStatus(p.id, "draft")}>Unpublish</button>
                   </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sorted.map((p) => {
+              const worldLabel = WORLD_CATALOG[p.worldId]?.label ?? p.worldId;
+              const isRenaming = renameId === p.id;
+              const isPinned = pinnedSet.has(p.id);
+
+              return (
+                <div key={p.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                  {!isRenaming ? (
+                    <>
+                      <div className="font-semibold">{isPinned ? "📌 " : ""}{p.title}</div>
+                      <div className="text-sm opacity-70">{worldLabel} · {statusLabel(p.status)} · {fmt(p.updatedAt)}</div>
+
+                      <div className="mt-3 flex gap-2 flex-wrap">
+                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => onOpenProject(p.id)}>Continue</button>
+                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => togglePinnedProject(p.id)}>{isPinned ? "Unpin" : "Pin"}</button>
+                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => onSetStatus(p.id, p.status === "done" ? "draft" : "done")}>{p.status === "done" ? "Unpublish" : "Publish"}</button>
+                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => onDuplicateProject(p.id)}>Duplicate</button>
+                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => exportProject(p)}>Export</button>
+                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => { setRenameId(p.id); setRenameValue(p.title); }}>Rename</button>
+                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => openDelete(p.id)}>Delete</button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-sm opacity-70 mb-2">Rename project</div>
+                      <input className="w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white" value={renameValue} onChange={(e) => setRenameValue(e.target.value)} autoFocus />
+                      <div className="mt-3 flex gap-2 flex-wrap">
+                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => { const t = renameValue.trim(); if (!t) return; onRenameProject(p.id, t); setRenameId(null); setRenameValue(""); }}>Save</button>
+                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => { setRenameId(null); setRenameValue(""); }}>Cancel</button>
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -689,106 +672,41 @@ export default function ProjectList({
               <div className="min-w-0">
                 <div className="font-semibold truncate">{previewProject.title}</div>
                 <div className="text-xs opacity-70 truncate">
-                  {(WORLD_CATALOG[previewProject.worldId]?.label ?? previewProject.worldId)} ·{" "}
-                  {fmt(previewProject.updatedAt)} · {statusLabel(previewProject.status)}
-                  {" · "}
-                  {previewPinned ? "Pinned" : "Not pinned"}
+                  {(WORLD_CATALOG[previewProject.worldId]?.label ?? previewProject.worldId)} · {fmt(previewProject.updatedAt)} · {statusLabel(previewProject.status)} · {previewPinned ? "Pinned" : "Not pinned"}
                 </div>
               </div>
 
               <div className="flex gap-2 flex-wrap justify-end text-xs">
-                <button
-                  className={`rounded-xl border border-white/10 px-3 py-2 ${previewTab === "summary" ? "bg-white/10" : "bg-white/5"}`}
-                  onClick={() => setPreviewTab("summary")}
-                >
-                  Summary
-                </button>
-                <button
-                  className={`rounded-xl border border-white/10 px-3 py-2 ${previewTab === "json" ? "bg-white/10" : "bg-white/5"}`}
-                  onClick={() => setPreviewTab("json")}
-                >
-                  JSON
-                </button>
+                <button className={`rounded-xl border border-white/10 px-3 py-2 ${previewTab === "summary" ? "bg-white/10" : "bg-white/5"}`} onClick={() => setPreviewTab("summary")}>Summary</button>
+                <button className={`rounded-xl border border-white/10 px-3 py-2 ${previewTab === "json" ? "bg-white/10" : "bg-white/5"}`} onClick={() => setPreviewTab("json")}>JSON</button>
 
-                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => togglePinnedProject(previewProject.id)}>
-                  {previewPinned ? "Unpin" : "Pin"}
-                </button>
+                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => togglePinnedProject(previewProject.id)}>{previewPinned ? "Unpin" : "Pin"}</button>
+                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => exportProject(previewProject)}>Export</button>
 
-                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => exportProject(previewProject)}>
-                  Export
-                </button>
+                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => doCopy("JSON", previewJson)}>Copy JSON</button>
+                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => doCopy("Summary", previewLines.join("\n"))}>Copy summary</button>
 
-                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => doCopy("JSON", previewJson)}>
-                  Copy JSON
-                </button>
+                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={async () => { const code = putShare(previewProject); const ok = await copyText(code); await toastMsg(ok ? `Share code copied: ${code}` : `Code: ${code}`); }}>Share code</button>
 
-                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => doCopy("Summary", previewLines.join("\n"))}>
-                  Copy summary
-                </button>
+                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={async () => { const s = encodeShareString(previewProject); const ok = await copyText(s); await toastMsg(ok ? "Share string copied" : "Copy failed"); }} title="Works across devices (copy/paste)">Share string</button>
 
-                <button
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-                  onClick={async () => {
-                    const code = putShare(previewProject);
-                    const ok = await copyText(code);
-                    await toastMsg(ok ? `Share code copied: ${code}` : `Code: ${code}`);
-                  }}
-                  title="Local share code"
-                >
-                  Share code
-                </button>
-
-                <button
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-                  onClick={() => {
-                    const id = previewProject.id;
-                    closeModal();
-                    onOpenProjectReadOnly(id);
-                  }}
-                  title="Open read-only"
-                >
-                  Open (RO)
-                </button>
-
-                <button
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-                  onClick={() => {
-                    const id = previewProject.id;
-                    closeModal();
-                    onOpenProject(id);
-                  }}
-                  title="Open editable"
-                >
-                  Edit
-                </button>
-
-                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={closeModal}>
-                  Close
-                </button>
+                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => { const id = previewProject.id; closeModal(); onOpenProjectReadOnly(id); }}>Open (RO)</button>
+                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => { const id = previewProject.id; closeModal(); onOpenProject(id); }}>Edit</button>
+                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={closeModal}>Close</button>
               </div>
             </div>
 
             {previewTab === "summary" ? (
               <div className="mt-4 space-y-2">
-                <div className="text-xs opacity-60">
-                  Human preview. “Share code” works on this device/browser only (local-first).
-                </div>
+                <div className="text-xs opacity-60">Human preview. Share code = local only. Share string = cross-device copy/paste.</div>
                 <div className="rounded-xl border border-white/15 bg-black/30 p-4 text-sm">
-                  {previewLines.map((l, i) => (
-                    <div key={i} className="leading-relaxed">
-                      {l}
-                    </div>
-                  ))}
+                  {previewLines.map((l, i) => <div key={i} className="leading-relaxed">{l}</div>)}
                 </div>
               </div>
             ) : (
               <div className="mt-4">
                 <div className="text-xs opacity-60">Read-only JSON</div>
-                <textarea
-                  className="mt-3 w-full rounded-xl border border-white/15 bg-black/30 p-3 text-xs text-white font-mono min-h-[320px]"
-                  readOnly
-                  value={previewJson}
-                />
+                <textarea className="mt-3 w-full rounded-xl border border-white/15 bg-black/30 p-3 text-xs text-white font-mono min-h-[320px]" readOnly value={previewJson} />
               </div>
             )}
           </div>
@@ -801,26 +719,27 @@ export default function ProjectList({
           <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Import from code</div>
-            <div className="mt-2 text-sm opacity-80">
-              Local-only: works in the same browser profile. Imports as a new draft copy.
-            </div>
-
-            <input
-              className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
-              value={importCodeValue}
-              onChange={(e) => setImportCodeValue(e.target.value)}
-              placeholder="ABCD-EFGH"
-              autoFocus
-            />
-
+            <div className="mt-2 text-sm opacity-80">Local-only: works in same browser profile.</div>
+            <input className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white" value={importCodeValue} onChange={(e) => setImportCodeValue(e.target.value)} placeholder="ABCD-EFGH" autoFocus />
             <div className="mt-4 flex flex-col gap-2">
-              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={importFromCode}>
-                Import
-              </button>
+              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={importFromCode}>Import</button>
+              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={closeModal}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={closeModal}>
-                Cancel
-              </button>
+      {/* IMPORT STRING MODAL */}
+      {modal?.kind === "import_string" && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
+            <div className="font-semibold">Import share string</div>
+            <div className="mt-2 text-sm opacity-80">Cross-device: paste the string you copied from Preview → Share string.</div>
+            <textarea className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white min-h-[140px]" value={importStringValue} onChange={(e) => setImportStringValue(e.target.value)} placeholder="IAI1:..." autoFocus />
+            <div className="mt-4 flex flex-col gap-2">
+              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={importFromString}>Import</button>
+              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={closeModal}>Cancel</button>
             </div>
           </div>
         </div>
@@ -832,26 +751,10 @@ export default function ProjectList({
           <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Delete project?</div>
-            <div className="mt-2 text-sm opacity-80">
-              This will permanently remove{" "}
-              <span className="font-semibold">{deleteProject?.title ?? "this project"}</span>.
-            </div>
-
+            <div className="mt-2 text-sm opacity-80">This will permanently remove <span className="font-semibold">{deleteProject?.title ?? "this project"}</span>.</div>
             <div className="mt-4 flex flex-col gap-2">
-              <button
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={() => {
-                  const id = modal.id;
-                  closeModal();
-                  onDeleteProject(id);
-                }}
-              >
-                Delete
-              </button>
-
-              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={closeModal}>
-                Cancel
-              </button>
+              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={() => { const id = modal.id; closeModal(); onDeleteProject(id); }}>Delete</button>
+              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={closeModal}>Cancel</button>
             </div>
           </div>
         </div>
@@ -859,9 +762,7 @@ export default function ProjectList({
 
       {toast && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60]">
-          <div className="rounded-xl border border-white/10 bg-black/90 px-4 py-2 text-sm text-white">
-            {toast.msg}
-          </div>
+          <div className="rounded-xl border border-white/10 bg-black/90 px-4 py-2 text-sm text-white">{toast.msg}</div>
         </div>
       )}
     </div>
