@@ -53,6 +53,10 @@ export default function WorldShell({
   const [showRename, setShowRename] = useState(false);
   const [renameValue, setRenameValue] = useState("");
 
+  const [showPublish, setShowPublish] = useState(false);
+  const [coverEmoji, setCoverEmoji] = useState("");
+  const [blurb, setBlurb] = useState("");
+
   const isRO = Boolean(readOnly);
 
   const plannerState: PlannerState =
@@ -176,6 +180,20 @@ export default function WorldShell({
             {status === "done" ? "Unpublish" : "Publish"}
           </button>
 
+          <button
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+            onClick={() => {
+              if (!project || isRO) return;
+              setCoverEmoji(project.publish?.coverEmoji ?? "");
+              setBlurb(project.publish?.blurb ?? "");
+              setShowPublish(true);
+            }}
+            disabled={!project || isRO}
+            title="Publish settings"
+          >
+            Settings
+          </button>
+
           {isRO ? (
             <button
               className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
@@ -241,9 +259,73 @@ export default function WorldShell({
         </div>
       </div>
 
+      {showPublish && !isRO && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowPublish(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
+            <div className="font-semibold">Publish settings</div>
+            <div className="mt-2 text-sm opacity-80">
+              Optional metadata for Gallery cards.
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <div className="text-xs opacity-70">Cover emoji (optional)</div>
+                <input
+                  className="mt-1 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
+                  value={coverEmoji}
+                  onChange={(e) => setCoverEmoji(e.target.value)}
+                  placeholder="😀"
+                />
+                <div className="mt-1 text-xs opacity-60">
+                  Tip: use a single emoji. We’ll use world icon if empty.
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs opacity-70">Short description (optional)</div>
+                <textarea
+                  className="mt-1 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white min-h-[96px]"
+                  value={blurb}
+                  onChange={(e) => setBlurb(e.target.value)}
+                  placeholder="What is this project about?"
+                />
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                onClick={() => {
+                  if (!project) return;
+                  onSaveProject({
+                    ...project,
+                    publish: {
+                      coverEmoji: coverEmoji.trim() || undefined,
+                      blurb: blurb.trim() || undefined,
+                    },
+                  });
+                  setShowPublish(false);
+                }}
+              >
+                Save settings
+              </button>
+
+              <button
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                onClick={() => setShowPublish(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showRename && !isRO && (
-        <div className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowRename(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Rename project</div>
             <div className="mt-2 text-sm opacity-80">
               Change the title. It will persist in My projects.
@@ -287,8 +369,9 @@ export default function WorldShell({
       )}
 
       {showExit && (
-        <div className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowExit(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Leave this world?</div>
             <div className="mt-2 text-sm opacity-80">
               {isRO ? "Exit preview." : "Choose: save, delete, or stay."}
