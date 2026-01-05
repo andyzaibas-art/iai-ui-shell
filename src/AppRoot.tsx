@@ -11,6 +11,7 @@ import {
   saveProjects,
   upsertProject,
   Project,
+  ProjectStatus,
 } from "./projects/ProjectStore";
 
 const initialState: AppState = { mode: "home" };
@@ -169,6 +170,14 @@ export default function AppRoot() {
     });
   }
 
+  function setProjectStatus(id: string, status: ProjectStatus) {
+    setProjects((prev) => {
+      const p = prev.find((x) => x.id === id);
+      if (!p) return prev;
+      return upsertProject(prev, { ...p, status });
+    });
+  }
+
   function duplicateProject(id: string) {
     setProjects((prev) => {
       const p = prev.find((x) => x.id === id);
@@ -216,6 +225,7 @@ export default function AppRoot() {
           onImportProjectJson={importProjectJson}
           onRenameProject={renameProject}
           onDuplicateProject={duplicateProject}
+          onSetStatus={setProjectStatus}
         />
       )}
 
