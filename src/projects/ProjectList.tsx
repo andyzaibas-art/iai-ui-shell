@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Project, type ProjectStatus } from "./ProjectStore";
 import { WORLD_CATALOG, WORLD_DEFAULT_ORDER } from "../app/worldCatalog";
 import type { WorldId } from "../app/modes";
@@ -11,8 +11,16 @@ function fmt(ts: number) {
   }
 }
 
+function hm(isoLocal?: string) {
+  if (!isoLocal || typeof isoLocal !== "string") return "";
+  const t = isoLocal.split("T")[1];
+  return t ? t.slice(0, 5) : "";
+}
+
 function downloadJson(filename: string, data: unknown) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -26,6 +34,94 @@ function downloadJson(filename: string, data: unknown) {
 type WorldFilter = "all" | WorldId;
 type StatusFilter = "all" | ProjectStatus;
 type ViewMode = "list" | "gallery";
+type PreviewTab = "summary" | "json";
+
+function statusLabel(s: ProjectStatus) {
+  return s === "done" ? "Published" : "Draft";
+}
+
+function exportProject(p: Project) {
+  const safeTitle = (p.title || "project")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  downloadJson(`iai_${p.worldId}_${safeTitle}_${p.id}.json`, p);
+}
+
+function previewSummaryLines(p: Project): string[] {
+  const lines: string[] = [];
+
+  // Game
+  const game: any = (p.state as any)?.game;
+  if (game && typeof game === "object") {
+    const isGenerated = Boolean(game.story);
+    const draftTitle =
+      typeof game.draft?.title === "string" ? game.draft.title.trim() : "";
+    const hist = Array.isArray(game.history) ? game.history : [];
+    const lastChoices = hist
+      .slice(-3)
+      .map((x: any) => (typeof x?.choiceLabel === "string" ? x.choiceLabel : ""))
+      .filter(Boolean);
+
+    lines.push(`Game: ${isGenerated ? "Generated story" : "Built-in story"}`);
+    if (draftTitle) lines.push(`Title: ${draftTitle}`);
+    if (lastChoices.length) lines.push(`Last choices: ${lastChoices.join(" → ")}`);
+    return lines;
+  }
+
+  // Planner
+  const planner: any = (p.state as any)?.planner;
+  if (planner && typeof planner === "object") {
+    const variants = planner.variants;
+    const activeKey = variants?.active === "B" ? "B" : "A";
+    const active = activeKey === "B" ? variants?.B : variants?.A;
+
+    const blocks = Array.isArray(active?.blocks) ? active.blocks : [];
+    const tasks = Array.isArray(active?.tasks) ? active.tasks : [];
+
+    lines.push(`Planner: ${blocks.length} blocks, ${tasks.length} tasks`);
+    if (blocks.length) {
+      const first = blocks.slice(0, 6).map((b: any) => {
+        const s = hm(b?.start);
+        const e = hm(b?.end);
+        const title = typeof b?.title === "string" ? b.title : "Block";
+        const range = s && e ? `${s}–${e}` : "";
+        return range ? `${range} ${title}` : title;
+      });
+      lines.push(...first);
+      if (blocks.length > 6) lines.push(`… +${blocks.length - 6} more`);
+    } else {
+      lines.push("No schedule built yet.");
+    }
+    return lines;
+  }
+
+  // Writing
+  const writing: any = (p.state as any)?.writing;
+  if (writing && typeof writing === "object") {
+    const candidates = [
+      writing.text,
+      writing.content,
+      writing.body,
+      writing.draft,
+      writing.draftText,
+      writing.value,
+    ];
+    const txt = candidates.find((x) => typeof x === "string") as string | undefined;
+
+    lines.push("Writing:");
+    if (txt && txt.trim()) {
+      const clean = txt.trim().replace(/\s+/g, " ");
+      lines.push(clean.length > 280 ? `${clean.slice(0, 280)}…` : clean);
+    } else {
+      lines.push("No text yet.");
+    }
+    return lines;
+  }
+
+  lines.push("No preview available for this project yet.");
+  return lines;
+}
 
 export default function ProjectList({
   projects,
@@ -53,6 +149,7 @@ export default function ProjectList({
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [previewTab, setPreviewTab] = useState<PreviewTab>("summary");
 
   const [q, setQ] = useState("");
   const [worldFilter, setWorldFilter] = useState<WorldFilter>("all");
@@ -94,6 +191,10 @@ export default function ProjectList({
     return projects.find((p) => p.id === previewId) ?? null;
   }, [projects, previewId]);
 
+  useEffect(() => {
+    if (previewId && !previewProject) setPreviewId(null);
+  }, [previewId, previewProject]);
+
   const previewJson = useMemo(() => {
     if (!previewProject) return "";
     try {
@@ -103,17 +204,10 @@ export default function ProjectList({
     }
   }, [previewProject]);
 
-  function statusLabel(s: ProjectStatus) {
-    return s === "done" ? "Published" : "Draft";
-  }
-
-  function exportProject(p: Project) {
-    const safeTitle = (p.title || "project")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "_")
-      .replace(/^_+|_+$/g, "");
-    downloadJson(`iai_${p.worldId}_${safeTitle}_${p.id}.json`, p);
-  }
+  const previewLines = useMemo(() => {
+    if (!previewProject) return [];
+    return previewSummaryLines(previewProject);
+  }, [previewProject]);
 
   return (
     <div className="h-full flex flex-col">
@@ -239,10 +333,7 @@ export default function ProjectList({
               const isRenaming = renameId === p.id;
 
               return (
-                <div
-                  key={p.id}
-                  className="rounded-2xl border border-white/10 bg-white/5 p-4"
-                >
+                <div key={p.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
                   {!isRenaming ? (
                     <>
                       <div className="font-semibold">{p.title}</div>
@@ -260,9 +351,7 @@ export default function ProjectList({
 
                         <button
                           className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
-                          onClick={() =>
-                            onSetStatus(p.id, p.status === "done" ? "draft" : "done")
-                          }
+                          onClick={() => onSetStatus(p.id, p.status === "done" ? "draft" : "done")}
                         >
                           {p.status === "done" ? "Unpublish" : "Publish"}
                         </button>
@@ -341,28 +430,17 @@ export default function ProjectList({
             })}
           </div>
         ) : (
-          // GALLERY VIEW (details stub)
-          <div
-            className="grid gap-3"
-            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
-          >
+          // Gallery view
+          <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
             {filtered.map((p) => {
               const meta = WORLD_CATALOG[p.worldId];
               const worldLabel = meta?.label ?? p.worldId;
 
               return (
-                <div
-                  key={p.id}
-                  className="rounded-2xl border border-white/10 bg-white/5 p-4"
-                >
+                <div key={p.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
                   <div className="flex items-center gap-2">
                     {meta?.iconSrc ? (
-                      <img
-                        src={meta.iconSrc}
-                        alt=""
-                        className="w-7 h-7 opacity-90"
-                        draggable={false}
-                      />
+                      <img src={meta.iconSrc} alt="" className="w-7 h-7 opacity-90" draggable={false} />
                     ) : (
                       <span className="text-xl">{meta?.iconText ?? "⬚"}</span>
                     )}
@@ -377,7 +455,10 @@ export default function ProjectList({
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <button
                       className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
-                      onClick={() => setPreviewId(p.id)}
+                      onClick={() => {
+                        setPreviewId(p.id);
+                        setPreviewTab("summary");
+                      }}
                     >
                       Preview
                     </button>
@@ -421,10 +502,7 @@ export default function ProjectList({
       {/* Preview modal */}
       {previewId && previewProject && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setPreviewId(null)}
-          />
+          <div className="absolute inset-0 bg-black/60" onClick={() => setPreviewId(null)} />
           <div className="relative w-full max-w-3xl rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -435,7 +513,23 @@ export default function ProjectList({
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap justify-end">
+                <button
+                  className={`rounded-xl border border-white/10 px-3 py-2 ${
+                    previewTab === "summary" ? "bg-white/10" : "bg-white/5"
+                  }`}
+                  onClick={() => setPreviewTab("summary")}
+                >
+                  Summary
+                </button>
+                <button
+                  className={`rounded-xl border border-white/10 px-3 py-2 ${
+                    previewTab === "json" ? "bg-white/10" : "bg-white/5"
+                  }`}
+                  onClick={() => setPreviewTab("json")}
+                >
+                  JSON
+                </button>
                 <button
                   className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
                   onClick={() => exportProject(previewProject)}
@@ -462,15 +556,29 @@ export default function ProjectList({
               </div>
             </div>
 
-            <div className="mt-3 text-xs opacity-60">
-              Read-only preview (JSON). Use Export to share.
-            </div>
-
-            <textarea
-              className="mt-3 w-full rounded-xl border border-white/15 bg-black/30 p-3 text-xs text-white font-mono min-h-[320px]"
-              readOnly
-              value={previewJson}
-            />
+            {previewTab === "summary" ? (
+              <div className="mt-4 space-y-2">
+                <div className="text-xs opacity-60">
+                  Human preview (v0.4). Switch to JSON for full data.
+                </div>
+                <div className="rounded-xl border border-white/15 bg-black/30 p-4 text-sm">
+                  {previewLines.map((l, i) => (
+                    <div key={i} className="leading-relaxed">
+                      {l}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4">
+                <div className="text-xs opacity-60">Read-only JSON (debug/share)</div>
+                <textarea
+                  className="mt-3 w-full rounded-xl border border-white/15 bg-black/30 p-3 text-xs text-white font-mono min-h-[320px]"
+                  readOnly
+                  value={previewJson}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -478,18 +586,12 @@ export default function ProjectList({
       {/* Delete confirm */}
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setDeleteId(null)}
-          />
+          <div className="absolute inset-0 bg-black/60" onClick={() => setDeleteId(null)} />
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Delete project?</div>
             <div className="mt-2 text-sm opacity-80">
               This will permanently remove{" "}
-              <span className="font-semibold">
-                {deleteProject?.title ?? "this project"}
-              </span>
-              .
+              <span className="font-semibold">{deleteProject?.title ?? "this project"}</span>.
             </div>
 
             <div className="mt-4 flex flex-col gap-2">
@@ -514,11 +616,6 @@ export default function ProjectList({
             </div>
           </div>
         </div>
-      )}
-
-      {/* If preview is open and project disappears, close it */}
-      {previewId && !previewProject && (
-        <div className="hidden">{setTimeout(() => setPreviewId(null), 0)}</div>
       )}
     </div>
   );
