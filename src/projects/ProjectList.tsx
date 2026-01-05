@@ -50,6 +50,88 @@ type ViewMode = "list" | "gallery";
 type PreviewTab = "summary" | "json";
 type Toast = { msg: string; at: number } | null;
 
+// --- Local share codes (localStorage) ---
+const SHARE_KEY = "iai_ui_share_codes_v1";
+type ShareRecord = { project: Project; createdAt: number };
+
+function loadShareMap(): Record<string, ShareRecord> {
+  try {
+    const raw = localStorage.getItem(SHARE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    return parsed as Record<string, ShareRecord>;
+  } catch {
+    return {};
+  }
+}
+
+function saveShareMap(map: Record<string, ShareRecord>) {
+  try {
+    localStorage.setItem(SHARE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
+
+function normalizeCode(input: string) {
+  const s = (input ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const trimmed = s.slice(0, 8);
+  if (trimmed.length <= 4) return trimmed;
+  return `${trimmed.slice(0, 4)}-${trimmed.slice(4)}`;
+}
+
+function randomChars(len: number) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // avoid I/O/1/0 confusion
+  const out: string[] = [];
+  try {
+    const arr = new Uint32Array(len);
+    crypto.getRandomValues(arr);
+    for (let i = 0; i < len; i++) out.push(alphabet[arr[i] % alphabet.length]);
+  } catch {
+    for (let i = 0; i < len; i++) out.push(alphabet[Math.floor(Math.random() * alphabet.length)]);
+  }
+  return out.join("");
+}
+
+function generateCode(existing: Record<string, ShareRecord>) {
+  for (let i = 0; i < 20; i++) {
+    const raw = randomChars(8);
+    const code = `${raw.slice(0, 4)}-${raw.slice(4)}`;
+    if (!existing[code]) return code;
+  }
+  // fallback
+  const raw = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.toUpperCase();
+  return normalizeCode(raw);
+}
+
+function pruneShareMap(map: Record<string, ShareRecord>, max = 50) {
+  const entries = Object.entries(map);
+  if (entries.length <= max) return map;
+
+  entries.sort((a, b) => (b[1]?.createdAt ?? 0) - (a[1]?.createdAt ?? 0));
+  const keep = entries.slice(0, max);
+
+  const next: Record<string, ShareRecord> = {};
+  for (const [k, v] of keep) next[k] = v;
+  return next;
+}
+
+function putShare(project: Project): string {
+  const map = loadShareMap();
+  const code = generateCode(map);
+  map[code] = { project, createdAt: Date.now() };
+  saveShareMap(pruneShareMap(map));
+  return code;
+}
+
+function getShare(codeInput: string): Project | null {
+  const code = normalizeCode(codeInput);
+  if (!code || code.length < 4) return null;
+  const map = loadShareMap();
+  return map[code]?.project ?? null;
+}
+
 function statusLabel(s: ProjectStatus) {
   return s === "done" ? "Published" : "Draft";
 }
@@ -168,6 +250,9 @@ export default function ProjectList({
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [previewTab, setPreviewTab] = useState<PreviewTab>("summary");
 
+  const [showImportCode, setShowImportCode] = useState(false);
+  const [importCodeValue, setImportCodeValue] = useState("");
+
   const [toast, setToast] = useState<Toast>(null);
 
   const [q, setQ] = useState("");
@@ -183,6 +268,45 @@ export default function ProjectList({
     } catch {
       alert("Failed to import. Please select a valid project JSON file.");
     }
+  }
+
+  async function toastMsg(msg: string) {
+    setToast({ msg, at: Date.now() });
+    setTimeout(() => setToast(null), 1400);
+  }
+
+  async function doCopy(label: string, text: string) {
+    const ok = await copyText(text);
+    await toastMsg(ok ? `${label} copied` : `Copy failed`);
+  }
+
+  function importFromCode() {
+    const code = normalizeCode(importCodeValue);
+    if (!code || code.length < 4) {
+      void toastMsg("Enter a valid code");
+      return;
+    }
+    const p = getShare(code);
+    if (!p) {
+      void toastMsg("Code not found (local only)");
+      return;
+    }
+
+    // Import as a new editable draft copy
+    const t = Date.now();
+    const sharedCopy: any = {
+      ...p,
+      id: "",
+      createdAt: t,
+      updatedAt: t,
+      status: "draft",
+      title: `${p.title} (shared)`,
+    };
+
+    onImportProjectJson(sharedCopy);
+    setShowImportCode(false);
+    setImportCodeValue("");
+    void toastMsg(`Imported from code: ${code}`);
   }
 
   const effectiveStatus: StatusFilter = view === "gallery" ? "done" : statusFilter;
@@ -254,18 +378,12 @@ export default function ProjectList({
 
   const previewPinned = previewProject ? pinnedSet.has(previewProject.id) : false;
 
-  async function doCopy(label: string, text: string) {
-    const ok = await copyText(text);
-    setToast({ msg: ok ? `${label} copied` : `Copy failed`, at: Date.now() });
-    setTimeout(() => setToast(null), 1400);
-  }
-
   return (
     <div className="h-full flex flex-col">
       <div className="p-4 flex items-center justify-between border-b border-white/10 bg-black/40">
         <div className="font-semibold">My projects</div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
           <input
             ref={fileRef}
             type="file"
@@ -283,7 +401,15 @@ export default function ProjectList({
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
             onClick={() => fileRef.current?.click()}
           >
-            Import
+            Import file
+          </button>
+
+          <button
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+            onClick={() => setShowImportCode(true)}
+            title="Import from local share code"
+          >
+            Import code
           </button>
 
           <button
@@ -377,7 +503,7 @@ export default function ProjectList({
       <div className="flex-1 p-6 overflow-auto">
         {projects.length === 0 ? (
           <div className="opacity-80">
-            No projects yet. Open a world from Home to create one, or import a JSON.
+            No projects yet. Open a world from Home to create one, or import a file/code.
           </div>
         ) : sorted.length === 0 ? (
           <div className="opacity-80">
@@ -404,7 +530,7 @@ export default function ProjectList({
                           Continue
                         </button>
 
-                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => togglePinnedProject(p.id)} title={isPinned ? "Unpin" : "Pin"}>
+                        <button className="rounded-xl border border-white/10 bg-black/30 px-3 py-2" onClick={() => togglePinnedProject(p.id)}>
                           {isPinned ? "Unpin" : "Pin"}
                         </button>
 
@@ -582,11 +708,15 @@ export default function ProjectList({
                 </button>
 
                 <button
-                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 opacity-70"
-                  onClick={() => setToast({ msg: "Share token: later", at: Date.now() })}
-                  title="Stub"
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+                  onClick={async () => {
+                    const code = putShare(previewProject);
+                    const ok = await copyText(code);
+                    await toastMsg(ok ? `Share code copied: ${code}` : `Code: ${code}`);
+                  }}
+                  title="Local share code"
                 >
-                  Share token
+                  Share code
                 </button>
 
                 <button
@@ -621,7 +751,9 @@ export default function ProjectList({
 
             {previewTab === "summary" ? (
               <div className="mt-4 space-y-2">
-                <div className="text-xs opacity-60">Human preview. Copy summary / JSON for sharing.</div>
+                <div className="text-xs opacity-60">
+                  Human preview. “Share code” works on this device/browser only (local-first).
+                </div>
                 <div className="rounded-xl border border-white/15 bg-black/30 p-4 text-sm">
                   {previewLines.map((l, i) => (
                     <div key={i} className="leading-relaxed">
@@ -640,6 +772,42 @@ export default function ProjectList({
                 />
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showImportCode && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setShowImportCode(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
+            <div className="font-semibold">Import from code</div>
+            <div className="mt-2 text-sm opacity-80">
+              Local-only: works in the same browser profile. Imports as a new draft copy.
+            </div>
+
+            <input
+              className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
+              value={importCodeValue}
+              onChange={(e) => setImportCodeValue(e.target.value)}
+              placeholder="ABCD-EFGH"
+              autoFocus
+            />
+
+            <div className="mt-4 flex flex-col gap-2">
+              <button
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                onClick={importFromCode}
+              >
+                Import
+              </button>
+
+              <button
+                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                onClick={() => setShowImportCode(false)}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
