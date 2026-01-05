@@ -1,14 +1,20 @@
 import { useSyncExternalStore } from "react";
 import { WorldId } from "../modes";
 
+export type GallerySort = "pinned_recent" | "recent" | "title";
+
 export type UiPrefs = {
   iconOrder: WorldId[];
+  pinnedProjectIds: string[];
+  gallerySort: GallerySort;
 };
 
 const STORAGE_KEY = "iai.uiPrefs.v0";
 
 const DEFAULT_PREFS: UiPrefs = {
   iconOrder: [],
+  pinnedProjectIds: [],
+  gallerySort: "pinned_recent",
 };
 
 let _prefs: UiPrefs = load();
@@ -54,17 +60,27 @@ function writeJson(key: string, value: unknown) {
   }
 }
 
+function isGallerySort(v: unknown): v is GallerySort {
+  return v === "pinned_recent" || v === "recent" || v === "title";
+}
+
 function load(): UiPrefs {
-  const data = readJson<UiPrefs>(STORAGE_KEY);
+  const data = readJson<any>(STORAGE_KEY);
   if (!data || typeof data !== "object") return { ...DEFAULT_PREFS };
 
-  const iconOrder = Array.isArray((data as any).iconOrder)
-    ? ((data as any).iconOrder as unknown[]).filter(
-        (x): x is WorldId => typeof x === "string"
-      )
+  const iconOrder = Array.isArray(data.iconOrder)
+    ? (data.iconOrder as unknown[]).filter((x): x is WorldId => typeof x === "string")
     : [];
 
-  return { iconOrder };
+  const pinnedProjectIds = Array.isArray(data.pinnedProjectIds)
+    ? (data.pinnedProjectIds as unknown[]).filter((x): x is string => typeof x === "string")
+    : [];
+
+  const gallerySort: GallerySort = isGallerySort(data.gallerySort)
+    ? data.gallerySort
+    : DEFAULT_PREFS.gallerySort;
+
+  return { iconOrder, pinnedProjectIds, gallerySort };
 }
 
 function save(next: UiPrefs) {
@@ -96,4 +112,15 @@ export function setIconOrder(nextOrder: WorldId[]) {
     }
   }
   save({ ..._prefs, iconOrder: cleaned });
+}
+
+export function togglePinnedProject(id: string) {
+  const cur = _prefs.pinnedProjectIds ?? [];
+  const has = cur.includes(id);
+  const next = has ? cur.filter((x) => x !== id) : [id, ...cur];
+  save({ ..._prefs, pinnedProjectIds: next });
+}
+
+export function setGallerySort(sort: GallerySort) {
+  save({ ..._prefs, gallerySort: sort });
 }
