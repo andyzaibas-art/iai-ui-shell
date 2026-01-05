@@ -52,11 +52,11 @@ export default function ProjectList({
   const [renameValue, setRenameValue] = useState("");
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
   const [worldFilter, setWorldFilter] = useState<WorldFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-
   const [view, setView] = useState<ViewMode>("list");
 
   async function handleImportFile(file: File) {
@@ -89,8 +89,30 @@ export default function ProjectList({
     return projects.find((p) => p.id === deleteId) ?? null;
   }, [projects, deleteId]);
 
+  const previewProject = useMemo(() => {
+    if (!previewId) return null;
+    return projects.find((p) => p.id === previewId) ?? null;
+  }, [projects, previewId]);
+
+  const previewJson = useMemo(() => {
+    if (!previewProject) return "";
+    try {
+      return JSON.stringify(previewProject, null, 2);
+    } catch {
+      return "";
+    }
+  }, [previewProject]);
+
   function statusLabel(s: ProjectStatus) {
     return s === "done" ? "Published" : "Draft";
+  }
+
+  function exportProject(p: Project) {
+    const safeTitle = (p.title || "project")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+    downloadJson(`iai_${p.worldId}_${safeTitle}_${p.id}.json`, p);
   }
 
   return (
@@ -254,13 +276,7 @@ export default function ProjectList({
 
                         <button
                           className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
-                          onClick={() => {
-                            const safeTitle = (p.title || "project")
-                              .toLowerCase()
-                              .replace(/[^a-z0-9]+/g, "_")
-                              .replace(/^_+|_+$/g, "");
-                            downloadJson(`iai_${p.worldId}_${safeTitle}_${p.id}.json`, p);
-                          }}
+                          onClick={() => exportProject(p)}
                         >
                           Export
                         </button>
@@ -325,7 +341,7 @@ export default function ProjectList({
             })}
           </div>
         ) : (
-          // GALLERY VIEW (stub)
+          // GALLERY VIEW (details stub)
           <div
             className="grid gap-3"
             style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
@@ -361,28 +377,14 @@ export default function ProjectList({
                   <div className="mt-3 flex gap-2 flex-wrap">
                     <button
                       className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
-                      onClick={() => onOpenProject(p.id)}
+                      onClick={() => setPreviewId(p.id)}
                     >
-                      Open
+                      Preview
                     </button>
 
                     <button
                       className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
-                      onClick={() => onSetStatus(p.id, "draft")}
-                      title="Unpublish"
-                    >
-                      Unpublish
-                    </button>
-
-                    <button
-                      className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
-                      onClick={() => {
-                        const safeTitle = (p.title || "project")
-                          .toLowerCase()
-                          .replace(/[^a-z0-9]+/g, "_")
-                          .replace(/^_+|_+$/g, "");
-                        downloadJson(`iai_${p.worldId}_${safeTitle}_${p.id}.json`, p);
-                      }}
+                      onClick={() => exportProject(p)}
                     >
                       Export
                     </button>
@@ -392,6 +394,14 @@ export default function ProjectList({
                       onClick={() => onDuplicateProject(p.id)}
                     >
                       Copy
+                    </button>
+
+                    <button
+                      className="rounded-xl border border-white/10 bg-black/30 px-3 py-2"
+                      onClick={() => onSetStatus(p.id, "draft")}
+                      title="Unpublish"
+                    >
+                      Unpublish
                     </button>
 
                     <button
@@ -408,6 +418,64 @@ export default function ProjectList({
         )}
       </div>
 
+      {/* Preview modal */}
+      {previewId && previewProject && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setPreviewId(null)}
+          />
+          <div className="relative w-full max-w-3xl rounded-2xl border border-white/10 bg-black p-4 text-white">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-semibold truncate">{previewProject.title}</div>
+                <div className="text-xs opacity-70 truncate">
+                  {(WORLD_CATALOG[previewProject.worldId]?.label ?? previewProject.worldId)} ·{" "}
+                  {fmt(previewProject.updatedAt)} · {statusLabel(previewProject.status)}
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+                  onClick={() => exportProject(previewProject)}
+                >
+                  Export
+                </button>
+                <button
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+                  onClick={() => {
+                    const id = previewProject.id;
+                    setPreviewId(null);
+                    onOpenProject(id);
+                  }}
+                  title="Open editable"
+                >
+                  Open
+                </button>
+                <button
+                  className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+                  onClick={() => setPreviewId(null)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 text-xs opacity-60">
+              Read-only preview (JSON). Use Export to share.
+            </div>
+
+            <textarea
+              className="mt-3 w-full rounded-xl border border-white/15 bg-black/30 p-3 text-xs text-white font-mono min-h-[320px]"
+              readOnly
+              value={previewJson}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
       {deleteId && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
           <div
@@ -446,6 +514,11 @@ export default function ProjectList({
             </div>
           </div>
         </div>
+      )}
+
+      {/* If preview is open and project disappears, close it */}
+      {previewId && !previewProject && (
+        <div className="hidden">{setTimeout(() => setPreviewId(null), 0)}</div>
       )}
     </div>
   );
