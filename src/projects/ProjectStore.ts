@@ -3,6 +3,11 @@ import { WORLD_CATALOG } from "../app/worldCatalog";
 
 export type ProjectStatus = "draft" | "done";
 
+export type PublishMeta = {
+  blurb?: string;       // short description for Gallery
+  coverEmoji?: string;  // optional cover icon (emoji)
+};
+
 export type Project = {
   id: string;
   worldId: WorldId;
@@ -11,6 +16,7 @@ export type Project = {
   updatedAt: number;
   status: ProjectStatus;
   title: string;
+  publish?: PublishMeta;
   state: Record<string, unknown>;
 };
 
@@ -97,14 +103,13 @@ export function createProject(params: {
     updatedAt: t,
     status: "draft",
     title,
+    publish: undefined,
     state: {},
   };
 }
 
 export function upsertProject(projects: Project[], project: Project): Project[] {
   const updated: Project = { ...project, updatedAt: now() };
-
-  // Always bubble updated project to top (most-recent first).
   const rest = projects.filter((p) => p.id !== updated.id);
   return [updated, ...rest];
 }
