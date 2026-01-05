@@ -64,6 +64,9 @@ function normalizeImportedProject(raw: unknown): Project | null {
   const state =
     o.state && typeof o.state === "object" ? (o.state as Record<string, unknown>) : {};
 
+  const publish =
+    o.publish && typeof o.publish === "object" ? (o.publish as Project["publish"]) : undefined;
+
   const id =
     typeof o.id === "string" && o.id.trim().length > 0 ? o.id.trim() : makeId();
 
@@ -75,6 +78,7 @@ function normalizeImportedProject(raw: unknown): Project | null {
     updatedAt,
     status,
     title,
+    publish,
     state,
   };
 }
@@ -205,6 +209,7 @@ export default function AppRoot() {
         status: "draft",
         title: `${p.title} (copy)`,
         state: cloneJson(p.state),
+        publish: cloneJson(p.publish),
       };
 
       return upsertProject(prev, copy);
@@ -224,6 +229,7 @@ export default function AppRoot() {
       status: "draft",
       title: `${p.title} (copy)`,
       state: cloneJson(p.state),
+      publish: cloneJson(p.publish),
     };
 
     setProjects((prev) => upsertProject(prev, copy));
