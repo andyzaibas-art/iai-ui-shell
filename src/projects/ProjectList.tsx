@@ -139,8 +139,11 @@ function getShare(codeInput: string): Project | null {
   return map[code]?.project ?? null;
 }
 
-// --- Portable share string (copy/paste across devices) ---
+// --- Portable share string (cross-device) ---
+// IAI1: = raw JSON bytes base64url
+// IAI2: = gzip(JSON) bytes base64url (shorter, if supported)
 const SHARE_STR_PREFIX = "IAI1:";
+const SHARE_STR_GZ_PREFIX = "IAI2:";
 
 function bytesToB64Url(bytes: Uint8Array): string {
   let bin = "";
@@ -165,14 +168,80 @@ function b64UrlToBytes(s: string): Uint8Array | null {
   }
 }
 
-function encodeShareString(project: Project): string {
-  const json = JSON.stringify(project);
-  const bytes = new TextEncoder().encode(json);
-  return SHARE_STR_PREFIX + bytesToB64Url(bytes);
+async function readAllBytes(rs: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+  const reader = rs.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (value) {
+      chunks.push(value);
+      total += value.length;
+    }
+  }
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.length;
+  }
+  return out;
 }
 
-function decodeShareString(input: string): unknown | null {
+async function gzipCompress(bytes: Uint8Array): Promise<Uint8Array | null> {
+  const CS = (globalThis as any).CompressionStream;
+  if (!CS) return null;
+  try {
+    const cs = new CS("gzip");
+    const stream = new Blob([bytes]).stream().pipeThrough(cs);
+    return await readAllBytes(stream);
+  } catch {
+    return null;
+  }
+}
+
+async function gzipDecompress(bytes: Uint8Array): Promise<Uint8Array | null> {
+  const DS = (globalThis as any).DecompressionStream;
+  if (!DS) return null;
+  try {
+    const ds = new DS("gzip");
+    const stream = new Blob([bytes]).stream().pipeThrough(ds);
+    return await readAllBytes(stream);
+  } catch {
+    return null;
+  }
+}
+
+async function encodeShareString(project: Project): Promise<string> {
+  const json = JSON.stringify(project);
+  const raw = new TextEncoder().encode(json);
+
+  const gz = await gzipCompress(raw);
+  if (gz && gz.length > 0 && gz.length < raw.length) {
+    return SHARE_STR_GZ_PREFIX + bytesToB64Url(gz);
+  }
+  return SHARE_STR_PREFIX + bytesToB64Url(raw);
+}
+
+async function decodeShareString(input: string): Promise<unknown | null> {
   const raw = (input ?? "").trim();
+  if (!raw) return null;
+
+  if (raw.startsWith(SHARE_STR_GZ_PREFIX)) {
+    const bytes = b64UrlToBytes(raw.slice(SHARE_STR_GZ_PREFIX.length));
+    if (!bytes) return null;
+    const dec = await gzipDecompress(bytes);
+    if (!dec) return null;
+    try {
+      const json = new TextDecoder().decode(dec);
+      return JSON.parse(json);
+    } catch {
+      return null;
+    }
+  }
+
   const s = raw.startsWith(SHARE_STR_PREFIX) ? raw.slice(SHARE_STR_PREFIX.length) : raw;
   const bytes = b64UrlToBytes(s);
   if (!bytes) return null;
@@ -381,8 +450,8 @@ export default function ProjectList({
     void toastMsg(`Imported from code: ${code}`);
   }
 
-  function importFromString() {
-    const decoded = decodeShareString(importStringValue);
+  async function importFromString() {
+    const decoded = await decodeShareString(importStringValue);
     if (!decoded || typeof decoded !== "object") {
       void toastMsg("Invalid share string");
       return;
@@ -510,72 +579,36 @@ export default function ProjectList({
 
       <div className="p-4 border-b border-white/10 bg-black/20">
         <div className="flex flex-col lg:flex-row gap-2">
-          <input
-            className="flex-1 rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search projects…"
-          />
+          <input className="flex-1 rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search projects…" />
 
-          <select
-            className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
-            value={worldFilter}
-            onChange={(e) => setWorldFilter(e.target.value as WorldFilter)}
-          >
+          <select className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white" value={worldFilter} onChange={(e) => setWorldFilter(e.target.value as WorldFilter)}>
             <option value="all">All worlds</option>
             {WORLD_DEFAULT_ORDER.map((id) => (
-              <option key={id} value={id}>
-                {WORLD_CATALOG[id]?.label ?? id}
-              </option>
+              <option key={id} value={id}>{WORLD_CATALOG[id]?.label ?? id}</option>
             ))}
           </select>
 
-          <select
-            className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white disabled:opacity-60"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-            disabled={view === "gallery"}
-          >
+          <select className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white disabled:opacity-60" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} disabled={view === "gallery"}>
             <option value="all">All status</option>
             <option value="draft">Draft</option>
             <option value="done">Published</option>
           </select>
 
-          <select
-            className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
-            value={sortMode}
-            onChange={(e) => setGallerySort(e.target.value as GallerySort)}
-          >
+          <select className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white" value={sortMode} onChange={(e) => setGallerySort(e.target.value as GallerySort)}>
             <option value="pinned_recent">Pinned → Recent</option>
             <option value="recent">Recent</option>
             <option value="title">Title A–Z</option>
           </select>
 
           <div className="flex gap-2">
-            <button className={`rounded-xl border border-white/10 px-3 py-2 ${view === "list" ? "bg-white/10" : "bg-white/5"}`} onClick={() => setView("list")}>
-              List
-            </button>
-            <button className={`rounded-xl border border-white/10 px-3 py-2 ${view === "gallery" ? "bg-white/10" : "bg-white/5"}`} onClick={() => setView("gallery")}>
-              Gallery
-            </button>
-            <button
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-              onClick={() => {
-                setQ("");
-                setWorldFilter("all");
-                setStatusFilter("all");
-                setView("list");
-              }}
-            >
-              Clear
-            </button>
+            <button className={`rounded-xl border border-white/10 px-3 py-2 ${view === "list" ? "bg-white/10" : "bg-white/5"}`} onClick={() => setView("list")}>List</button>
+            <button className={`rounded-xl border border-white/10 px-3 py-2 ${view === "gallery" ? "bg-white/10" : "bg-white/5"}`} onClick={() => setView("gallery")}>Gallery</button>
+            <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => { setQ(""); setWorldFilter("all"); setStatusFilter("all"); setView("list"); }}>Clear</button>
           </div>
         </div>
 
         <div className="mt-2 text-xs text-white/60">
-          Showing {sorted.length} of {projects.length}
-          {view === "gallery" ? " (Published only)" : ""}
-          {pinnedIds.length ? ` · Pinned: ${pinnedIds.length}` : ""}
+          Showing {sorted.length} of {projects.length}{view === "gallery" ? " (Published only)" : ""}{pinnedIds.length ? ` · Pinned: ${pinnedIds.length}` : ""}
         </div>
       </div>
 
@@ -663,7 +696,6 @@ export default function ProjectList({
         )}
       </div>
 
-      {/* PREVIEW MODAL */}
       {modal?.kind === "preview" && previewProject && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
@@ -688,7 +720,9 @@ export default function ProjectList({
 
                 <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={async () => { const code = putShare(previewProject); const ok = await copyText(code); await toastMsg(ok ? `Share code copied: ${code}` : `Code: ${code}`); }}>Share code</button>
 
-                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={async () => { const s = encodeShareString(previewProject); const ok = await copyText(s); await toastMsg(ok ? "Share string copied" : "Copy failed"); }} title="Works across devices (copy/paste)">Share string</button>
+                <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={async () => { const s = await encodeShareString(previewProject); const ok = await copyText(s); await toastMsg(ok ? "Share string copied" : "Copy failed"); }} title="Compressed if supported">
+                  Share string
+                </button>
 
                 <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => { const id = previewProject.id; closeModal(); onOpenProjectReadOnly(id); }}>Open (RO)</button>
                 <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => { const id = previewProject.id; closeModal(); onOpenProject(id); }}>Edit</button>
@@ -698,7 +732,7 @@ export default function ProjectList({
 
             {previewTab === "summary" ? (
               <div className="mt-4 space-y-2">
-                <div className="text-xs opacity-60">Human preview. Share code = local only. Share string = cross-device copy/paste.</div>
+                <div className="text-xs opacity-60">Human preview. Share string now uses gzip when available (shorter).</div>
                 <div className="rounded-xl border border-white/15 bg-black/30 p-4 text-sm">
                   {previewLines.map((l, i) => <div key={i} className="leading-relaxed">{l}</div>)}
                 </div>
@@ -713,7 +747,6 @@ export default function ProjectList({
         </div>
       )}
 
-      {/* IMPORT CODE MODAL */}
       {modal?.kind === "import_code" && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
@@ -729,23 +762,21 @@ export default function ProjectList({
         </div>
       )}
 
-      {/* IMPORT STRING MODAL */}
       {modal?.kind === "import_string" && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
           <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Import share string</div>
-            <div className="mt-2 text-sm opacity-80">Cross-device: paste the string you copied from Preview → Share string.</div>
-            <textarea className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white min-h-[140px]" value={importStringValue} onChange={(e) => setImportStringValue(e.target.value)} placeholder="IAI1:..." autoFocus />
+            <div className="mt-2 text-sm opacity-80">Paste `IAI1:` or `IAI2:` string (IAI2 is shorter).</div>
+            <textarea className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white min-h-[140px]" value={importStringValue} onChange={(e) => setImportStringValue(e.target.value)} placeholder="IAI2:..." autoFocus />
             <div className="mt-4 flex flex-col gap-2">
-              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={importFromString}>Import</button>
+              <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={() => void importFromString()}>Import</button>
               <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={closeModal}>Cancel</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* DELETE CONFIRM MODAL */}
       {modal?.kind === "delete" && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
