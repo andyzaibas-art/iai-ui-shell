@@ -195,7 +195,7 @@ async function gzipCompress(bytes: Uint8Array): Promise<Uint8Array | null> {
   if (!CS) return null;
   try {
     const cs = new CS("gzip");
-    const stream = new Blob([bytes]).stream().pipeThrough(cs);
+    const stream = new Blob([bytes as unknown as BlobPart]).stream().pipeThrough(cs as any) as ReadableStream<Uint8Array>;
     return await readAllBytes(stream);
   } catch {
     return null;
@@ -207,7 +207,7 @@ async function gzipDecompress(bytes: Uint8Array): Promise<Uint8Array | null> {
   if (!DS) return null;
   try {
     const ds = new DS("gzip");
-    const stream = new Blob([bytes]).stream().pipeThrough(ds);
+    const stream = new Blob([bytes as unknown as BlobPart]).stream().pipeThrough(ds as any) as ReadableStream<Uint8Array>;
     return await readAllBytes(stream);
   } catch {
     return null;
