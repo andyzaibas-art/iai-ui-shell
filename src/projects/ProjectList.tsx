@@ -215,7 +215,7 @@ async function gzipDecompress(bytes: Uint8Array): Promise<Uint8Array | null> {
 }
 
 async function encodeShareString(project: Project): Promise<string> {
-  const json = JSON.stringify(project);
+  const payload = { v: 1, worldId: project.worldId, title: project.title, publish: project.publish, state: project.state };\n  const json = JSON.stringify(payload);
   const raw = new TextEncoder().encode(json);
 
   const gz = await gzipCompress(raw);
