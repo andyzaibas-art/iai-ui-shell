@@ -12,4 +12,5 @@ export type AppState = {
   mode: AppMode;
   activeWorld?: WorldId;
   activeProjectId?: string;
+  returnMode?: AppMode; // where "Exit" returns (home/projects)
 };

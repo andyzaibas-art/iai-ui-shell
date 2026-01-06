@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AppState, WorldId } from "./app/modes";
+import { AppMode, AppState, WorldId } from "./app/modes";
 import { enableBeforeUnloadGuard } from "./app/guards";
 import HomeScreen from "./home/HomeScreen";
 import ProjectList from "./projects/ProjectList";
@@ -14,7 +14,7 @@ import {
   ProjectStatus,
 } from "./projects/ProjectStore";
 
-const initialState: AppState = { mode: "home" };
+const initialState: AppState = { mode: "home", returnMode: "home" };
 
 function isWorldId(v: unknown): v is WorldId {
   return (
@@ -62,10 +62,14 @@ function normalizeImportedProject(raw: unknown): Project | null {
       : `Imported ${o.worldId}`;
 
   const state =
-    o.state && typeof o.state === "object" ? (o.state as Record<string, unknown>) : {};
+    o.state && typeof o.state === "object"
+      ? (o.state as Record<string, unknown>)
+      : {};
 
   const publish =
-    o.publish && typeof o.publish === "object" ? (o.publish as Project["publish"]) : undefined;
+    o.publish && typeof o.publish === "object"
+      ? (o.publish as Project["publish"])
+      : undefined;
 
   const id =
     typeof o.id === "string" && o.id.trim().length > 0 ? o.id.trim() : makeId();
@@ -108,40 +112,35 @@ export default function AppRoot() {
 
   function goHome() {
     setReadOnly(false);
-    setState((s) => ({ ...s, mode: "home" }));
+    setState((s) => ({ ...s, mode: "home", returnMode: "home" }));
   }
 
   function openProjects() {
     setReadOnly(false);
-    setState((s) => ({ ...s, mode: "projects" }));
+    setState((s) => ({ ...s, mode: "projects", returnMode: "projects" }));
   }
 
-  function openProjectById(id: string) {
-    const p = projects.find((x) => x.id === id);
-    if (!p) return;
+  function exitWorld() {
     setReadOnly(false);
-    setState((s) => ({
-      ...s,
-      mode: "world",
-      activeWorld: p.worldId,
-      activeProjectId: p.id,
-    }));
+    setState((s) => ({ ...s, mode: (s.returnMode ?? "home") as AppMode }));
   }
 
-  function openProjectReadOnlyById(id: string) {
+  function openProjectById(id: string, returnMode: AppMode, ro: boolean) {
     const p = projects.find((x) => x.id === id);
     if (!p) return;
-    setReadOnly(true);
+
+    setReadOnly(ro);
     setState((s) => ({
       ...s,
       mode: "world",
       activeWorld: p.worldId,
       activeProjectId: p.id,
+      returnMode,
     }));
   }
 
-  function openWorldNew(worldId: WorldId) {
-    const p = createProject({ worldId, origin: "home" });
+  function openWorldNew(worldId: WorldId, origin: Project["origin"], returnMode: AppMode) {
+    const p = createProject({ worldId, origin });
     setProjects((prev) => upsertProject(prev, p));
     setReadOnly(false);
     setState((s) => ({
@@ -149,7 +148,22 @@ export default function AppRoot() {
       mode: "world",
       activeWorld: worldId,
       activeProjectId: p.id,
+      returnMode,
     }));
+  }
+
+  function openWorldFromHome(worldId: WorldId) {
+    openWorldNew(worldId, "home", "home");
+  }
+
+  function openWorldFromMenu(worldId: WorldId) {
+    const rm: AppMode =
+      state.mode === "projects"
+        ? "projects"
+        : state.mode === "home"
+        ? "home"
+        : (state.returnMode ?? "home");
+    openWorldNew(worldId, "home", rm);
   }
 
   function saveProject(p: Project) {
@@ -157,7 +171,8 @@ export default function AppRoot() {
   }
 
   function switchWorld(worldId: WorldId) {
-    openWorldNew(worldId);
+    const rm: AppMode = state.returnMode ?? "home";
+    openWorldNew(worldId, "not_sure", rm);
   }
 
   function deleteActiveProject() {
@@ -173,7 +188,7 @@ export default function AppRoot() {
       return;
     }
     setProjects((prev) => upsertProject(prev, p));
-    setState((s) => ({ ...s, mode: "projects" }));
+    setState((s) => ({ ...s, mode: "projects", returnMode: "projects" }));
   }
 
   function renameProject(id: string, title: string) {
@@ -239,6 +254,7 @@ export default function AppRoot() {
       mode: "world",
       activeWorld: copy.worldId,
       activeProjectId: copy.id,
+      returnMode: "projects",
     }));
   }
 
@@ -247,23 +263,25 @@ export default function AppRoot() {
       mode={state.mode}
       onHome={goHome}
       onProjects={openProjects}
-      onOpenWorld={openWorldNew}
+      onOpenWorld={openWorldFromMenu}
     >
       {state.mode === "home" && (
         <HomeScreen
-          onEnterWorld={openWorldNew}
+          onEnterWorld={openWorldFromHome}
           onOpenProjects={openProjects}
           lastProject={lastProject}
-          onResumeProject={(id) => openProjectById(id)}
+          onResumeProject={(id) => openProjectById(id, "home", false)}
         />
       )}
 
       {state.mode === "projects" && (
         <ProjectList
           projects={projects}
-          onOpenProject={(id) => openProjectById(id)}
-          onOpenProjectReadOnly={(id) => openProjectReadOnlyById(id)}
-          onDeleteProject={(id) => setProjects((prev) => prev.filter((p) => p.id !== id))}
+          onOpenProject={(id) => openProjectById(id, "projects", false)}
+          onOpenProjectReadOnly={(id) => openProjectById(id, "projects", true)}
+          onDeleteProject={(id) =>
+            setProjects((prev) => prev.filter((p) => p.id !== id))
+          }
           onBackHome={goHome}
           onImportProjectJson={importProjectJson}
           onRenameProject={renameProject}
@@ -280,7 +298,7 @@ export default function AppRoot() {
           readOnly={readOnly}
           onCopyProject={copyProjectAndOpen}
           onSaveProject={saveProject}
-          onExitToHome={goHome}
+          onExitToHome={exitWorld}
           onDeleteActiveProject={deleteActiveProject}
           onSwitchWorld={switchWorld}
         />
