@@ -6,6 +6,10 @@ import {
   useUiPrefs,
   togglePinnedProject,
   setGallerySort,
+  setProjectsView,
+  setProjectsWorldFilter,
+  setProjectsStatusFilter,
+  setProjectsQuery,
   type GallerySort,
 } from "../app/stores/UiPrefsStore";
 
@@ -376,10 +380,10 @@ export default function ProjectList({
 
   const [toast, setToast] = useState<Toast>(null);
 
-  const [q, setQ] = useState("");
-  const [worldFilter, setWorldFilter] = useState<WorldFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [view, setView] = useState<ViewMode>("list");
+  const [q, setQ] = useState(() => ui.projectsQuery ?? "");
+  const [worldFilter, setWorldFilter] = useState<WorldFilter>(() => (ui.projectsWorldFilter as WorldFilter) ?? "all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => (ui.projectsStatusFilter as StatusFilter) ?? "all");
+  const [view, setView] = useState<ViewMode>(() => (ui.projectsView === "gallery" ? "gallery" : "list"));
 
   async function handleImportFile(file: File) {
     try {
@@ -580,16 +584,28 @@ export default function ProjectList({
 
       <div className="p-4 border-b border-white/10 bg-black/20">
         <div className="flex flex-col lg:flex-row gap-2">
-          <input className="flex-1 rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search projects…" />
+          <input className="flex-1 rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white" value={q} onChange={(e) => {
+              const v = e.target.value;
+              setQ(v);
+              setProjectsQuery(v);
+            }} placeholder="Search projects…" />
 
-          <select className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white" value={worldFilter} onChange={(e) => setWorldFilter(e.target.value as WorldFilter)}>
+          <select className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white" value={worldFilter} onChange={(e) => {
+              const v = e.target.value as WorldFilter;
+              setWorldFilter(v);
+              setProjectsWorldFilter(v);
+            }}>
             <option value="all">All worlds</option>
             {WORLD_DEFAULT_ORDER.map((id) => (
               <option key={id} value={id}>{WORLD_CATALOG[id]?.label ?? id}</option>
             ))}
           </select>
 
-          <select className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white disabled:opacity-60" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} disabled={view === "gallery"}>
+          <select className="rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white disabled:opacity-60" value={statusFilter} onChange={(e) => {
+              const v = e.target.value as StatusFilter;
+              setStatusFilter(v);
+              setProjectsStatusFilter(v);
+            }} disabled={view === "gallery"}>
             <option value="all">All status</option>
             <option value="draft">Draft</option>
             <option value="done">Published</option>
@@ -602,9 +618,24 @@ export default function ProjectList({
           </select>
 
           <div className="flex gap-2">
-            <button className={`rounded-xl border border-white/10 px-3 py-2 ${view === "list" ? "bg-white/10" : "bg-white/5"}`} onClick={() => setView("list")}>List</button>
-            <button className={`rounded-xl border border-white/10 px-3 py-2 ${view === "gallery" ? "bg-white/10" : "bg-white/5"}`} onClick={() => setView("gallery")}>Gallery</button>
-            <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => { setQ(""); setWorldFilter("all"); setStatusFilter("all"); setView("list"); }}>Clear</button>
+            <button className={`rounded-xl border border-white/10 px-3 py-2 ${view === "list" ? "bg-white/10" : "bg-white/5"}`} onClick={() => {
+                setView("list");
+                setProjectsView("list");
+              }}>List</button>
+            <button className={`rounded-xl border border-white/10 px-3 py-2 ${view === "gallery" ? "bg-white/10" : "bg-white/5"}`} onClick={() => {
+                setView("gallery");
+                setProjectsView("gallery");
+              }}>Gallery</button>
+            <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => {
+                setQ("");
+                setProjectsQuery("");
+                setWorldFilter("all");
+                setProjectsWorldFilter("all");
+                setStatusFilter("all");
+                setProjectsStatusFilter("all");
+                setView("list");
+                setProjectsView("list");
+              }}>Clear</button>
           </div>
         </div>
 
