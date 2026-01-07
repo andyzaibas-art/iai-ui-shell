@@ -2,11 +2,19 @@ import { useSyncExternalStore } from "react";
 import { WorldId } from "../modes";
 
 export type GallerySort = "pinned_recent" | "recent" | "title";
+export type ProjectsView = "list" | "gallery";
+export type ProjectsStatusFilter = "all" | "draft" | "done";
+export type ProjectsWorldFilter = "all" | WorldId;
 
 export type UiPrefs = {
   iconOrder: WorldId[];
   pinnedProjectIds: string[];
   gallerySort: GallerySort;
+
+  projectsView: ProjectsView;
+  projectsWorldFilter: ProjectsWorldFilter;
+  projectsStatusFilter: ProjectsStatusFilter;
+  projectsQuery: string;
 };
 
 const STORAGE_KEY = "iai.uiPrefs.v0";
@@ -15,6 +23,11 @@ const DEFAULT_PREFS: UiPrefs = {
   iconOrder: [],
   pinnedProjectIds: [],
   gallerySort: "pinned_recent",
+
+  projectsView: "list",
+  projectsWorldFilter: "all",
+  projectsStatusFilter: "all",
+  projectsQuery: "",
 };
 
 let _prefs: UiPrefs = load();
@@ -64,6 +77,29 @@ function isGallerySort(v: unknown): v is GallerySort {
   return v === "pinned_recent" || v === "recent" || v === "title";
 }
 
+function isProjectsView(v: unknown): v is ProjectsView {
+  return v === "list" || v === "gallery";
+}
+
+function isProjectsStatusFilter(v: unknown): v is ProjectsStatusFilter {
+  return v === "all" || v === "draft" || v === "done";
+}
+
+function isWorldId(v: unknown): v is WorldId {
+  return (
+    v === "game" ||
+    v === "not_sure" ||
+    v === "planner" ||
+    v === "writing" ||
+    v === "video" ||
+    v === "app"
+  );
+}
+
+function isProjectsWorldFilter(v: unknown): v is ProjectsWorldFilter {
+  return v === "all" || isWorldId(v);
+}
+
 function load(): UiPrefs {
   const data = readJson<any>(STORAGE_KEY);
   if (!data || typeof data !== "object") return { ...DEFAULT_PREFS };
@@ -80,7 +116,29 @@ function load(): UiPrefs {
     ? data.gallerySort
     : DEFAULT_PREFS.gallerySort;
 
-  return { iconOrder, pinnedProjectIds, gallerySort };
+  const projectsView: ProjectsView = isProjectsView(data.projectsView)
+    ? data.projectsView
+    : DEFAULT_PREFS.projectsView;
+
+  const projectsWorldFilter: ProjectsWorldFilter = isProjectsWorldFilter(data.projectsWorldFilter)
+    ? data.projectsWorldFilter
+    : DEFAULT_PREFS.projectsWorldFilter;
+
+  const projectsStatusFilter: ProjectsStatusFilter = isProjectsStatusFilter(data.projectsStatusFilter)
+    ? data.projectsStatusFilter
+    : DEFAULT_PREFS.projectsStatusFilter;
+
+  const projectsQuery: string = typeof data.projectsQuery === "string" ? data.projectsQuery : DEFAULT_PREFS.projectsQuery;
+
+  return {
+    iconOrder,
+    pinnedProjectIds,
+    gallerySort,
+    projectsView,
+    projectsWorldFilter,
+    projectsStatusFilter,
+    projectsQuery,
+  };
 }
 
 function save(next: UiPrefs) {
@@ -123,4 +181,20 @@ export function togglePinnedProject(id: string) {
 
 export function setGallerySort(sort: GallerySort) {
   save({ ..._prefs, gallerySort: sort });
+}
+
+export function setProjectsView(view: ProjectsView) {
+  save({ ..._prefs, projectsView: view });
+}
+
+export function setProjectsWorldFilter(v: ProjectsWorldFilter) {
+  save({ ..._prefs, projectsWorldFilter: v });
+}
+
+export function setProjectsStatusFilter(v: ProjectsStatusFilter) {
+  save({ ..._prefs, projectsStatusFilter: v });
+}
+
+export function setProjectsQuery(q: string) {
+  save({ ..._prefs, projectsQuery: q });
 }
