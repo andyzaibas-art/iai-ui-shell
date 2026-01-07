@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { exportBackup, importBackup } from "../lib/backup";
 import { Project, type ProjectStatus } from "./ProjectStore";
 import { WORLD_CATALOG, WORLD_DEFAULT_ORDER } from "../app/worldCatalog";
 import type { WorldId } from "../app/modes";
@@ -368,6 +369,7 @@ export default function ProjectList({
   const pinnedSet = useMemo(() => new Set(pinnedIds), [pinnedIds]);
 
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const backupRef = useRef<HTMLInputElement | null>(null);
 
   const [renameId, setRenameId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
