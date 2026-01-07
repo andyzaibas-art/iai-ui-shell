@@ -14,8 +14,6 @@ import { WritingState, newWritingState } from "../worlds/writing/writingModel";
 import { WorldId } from "../app/modes";
 import { WORLD_CATALOG } from "../app/worldCatalog";
 
-type Modal = "exit" | "rename" | "publish" | null;
-
 function downloadJson(filename: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -32,8 +30,6 @@ export default function WorldShell({
   worldId,
   projectId,
   project,
-  readOnly = false,
-  onCopyProject,
   onSaveProject,
   onExitToHome,
   onDeleteActiveProject,
@@ -42,21 +38,12 @@ export default function WorldShell({
   worldId: WorldId;
   projectId?: string;
   project?: Project;
-  readOnly?: boolean;
-  onCopyProject: (id: string) => void;
   onSaveProject: (p: Project) => void;
   onExitToHome: () => void;
   onDeleteActiveProject: () => void;
   onSwitchWorld: (worldId: WorldId) => void;
 }) {
-  const [modal, setModal] = useState<Modal>(null);
-
-  const [renameValue, setRenameValue] = useState("");
-
-  const [coverEmoji, setCoverEmoji] = useState("");
-  const [blurb, setBlurb] = useState("");
-
-  const isRO = Boolean(readOnly);
+  const [showExit, setShowExit] = useState(false);
 
   const plannerState: PlannerState =
     (project?.state?.planner as PlannerState) ?? newPlannerState();
@@ -70,30 +57,10 @@ export default function WorldShell({
   const writingState: WritingState =
     (project?.state?.writing as WritingState) ?? newWritingState();
 
-  const baseLabel = WORLD_CATALOG[worldId]?.label ?? worldId;
-  const status = project?.status ?? "draft";
-  const statusLabel = status === "done" ? "Published" : "Draft";
-
   const title = useMemo(() => {
-    return project?.title ? `${baseLabel} — ${project.title}` : baseLabel;
-  }, [baseLabel, project?.title]);
-
-  function openExit() {
-    setModal("exit");
-  }
-
-  function openRename() {
-    if (!project || isRO) return;
-    setRenameValue(project.title ?? "");
-    setModal("rename");
-  }
-
-  function openPublishSettings() {
-    if (!project || isRO) return;
-    setCoverEmoji(project.publish?.coverEmoji ?? "");
-    setBlurb(project.publish?.blurb ?? "");
-    setModal("publish");
-  }
+    const base = WORLD_CATALOG[worldId]?.label ?? worldId;
+    return project?.title ? `${base} — ${project.title}` : base;
+  }, [project?.title, worldId]);
 
   function renderWorld() {
     if (worldId === "planner") {
@@ -101,7 +68,7 @@ export default function WorldShell({
         <PlannerFlow
           value={plannerState}
           onChange={(next) => {
-            if (!project || isRO) return;
+            if (!project) return;
             onSaveProject({ ...project, state: { ...project.state, planner: next } });
           }}
         />
@@ -113,7 +80,7 @@ export default function WorldShell({
         <GameFlow
           value={gameState}
           onChange={(next) => {
-            if (!project || isRO) return;
+            if (!project) return;
             onSaveProject({ ...project, state: { ...project.state, game: next } });
           }}
         />
@@ -125,13 +92,10 @@ export default function WorldShell({
         <NotSureFlow
           value={notSureState}
           onChange={(next) => {
-            if (!project || isRO) return;
+            if (!project) return;
             onSaveProject({ ...project, state: { ...project.state, not_sure: next } });
           }}
-          onChooseWorld={(target) => {
-            if (isRO) return;
-            onSwitchWorld(target);
-          }}
+          onChooseWorld={(target) => onSwitchWorld(target)}
         />
       );
     }
@@ -141,7 +105,7 @@ export default function WorldShell({
         <WritingFlow
           value={writingState}
           onChange={(next) => {
-            if (!project || isRO) return;
+            if (!project) return;
             onSaveProject({ ...project, state: { ...project.state, writing: next } });
           }}
         />
@@ -168,7 +132,17 @@ export default function WorldShell({
       );
     }
 
-    return <div className="opacity-80">Unknown world. Go back.</div>;
+    return (
+      <div className="space-y-3">
+        <div className="opacity-80">Unknown world.</div>
+        <button
+          className="rounded-xl border border-white/10 bg-white/5 px-4 py-2"
+          onClick={onExitToHome}
+        >
+          Back
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -178,59 +152,12 @@ export default function WorldShell({
           <div className="font-semibold truncate">{title}</div>
           <div className="text-xs opacity-60 truncate">
             {projectId ? `Project: ${projectId}` : "No project id"}
-            {" · "}
-            {statusLabel}
-            {isRO ? " · Read-only" : ""}
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex items-center gap-2">
           <button
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-            onClick={() => {
-              if (!project) return;
-              onSaveProject({ ...project, status: project.status === "done" ? "draft" : "done" });
-            }}
-            disabled={!project}
-            title={status === "done" ? "Unpublish" : "Publish"}
-          >
-            {status === "done" ? "Unpublish" : "Publish"}
-          </button>
-
-          <button
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-            onClick={openPublishSettings}
-            disabled={!project || isRO}
-            title="Publish settings"
-          >
-            Settings
-          </button>
-
-          {isRO ? (
-            <button
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-              onClick={() => {
-                if (!project) return;
-                onCopyProject(project.id);
-              }}
-              disabled={!project}
-              title="Copy to edit"
-            >
-              Copy
-            </button>
-          ) : (
-            <button
-              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-              onClick={openRename}
-              disabled={!project}
-              title="Rename"
-            >
-              Rename
-            </button>
-          )}
-
-          <button
-            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 disabled:opacity-50"
             onClick={() => {
               if (!project) return;
               const safeTitle = (project.title || "project")
@@ -240,6 +167,7 @@ export default function WorldShell({
               downloadJson(`iai_${project.worldId}_${safeTitle}_${project.id}.json`, project);
             }}
             disabled={!project}
+            aria-label="Export project as JSON"
             title="Export JSON"
           >
             Export
@@ -247,169 +175,62 @@ export default function WorldShell({
 
           <button
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
-            onClick={openExit}
+            onClick={() => setShowExit(true)}
           >
             Exit
           </button>
         </div>
       </div>
 
-      <div className="flex-1 p-6 overflow-auto">
-        {isRO && (
-          <div className="mb-3 rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-white/70">
-            Read-only preview. Use <span className="text-white">Copy</span> to create an editable draft.
-          </div>
-        )}
+      <div className="flex-1 p-6 overflow-auto">{renderWorld()}</div>
 
-        <div className="relative">
-          {isRO && <div className="absolute inset-0 z-10" />}
-          <div className={isRO ? "opacity-95" : ""}>{renderWorld()}</div>
-        </div>
-      </div>
+      {showExit && (
+        <div className="fixed inset-0 z-50">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/85 backdrop-blur-sm"
+            onClick={() => setShowExit(false)}
+          />
+          {/* Dialog */}
+          <div className="relative h-full flex items-end sm:items-center justify-center p-4">
+            <div
+              role="dialog"
+              aria-modal="true"
+              className="w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="font-semibold">Leave this world?</div>
+              <div className="mt-2 text-sm opacity-80">Choose: save, delete, or stay.</div>
 
-      {/* PUBLISH SETTINGS (single-modal system) */}
-      {modal === "publish" && !isRO && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setModal(null)} />
-          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
-            <div className="font-semibold">Publish settings</div>
-            <div className="mt-2 text-sm opacity-80">Optional metadata for Gallery cards.</div>
+              <div className="mt-4 flex flex-col gap-2">
+                <button
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                  onClick={() => {
+                    setShowExit(false);
+                    onExitToHome();
+                  }}
+                >
+                  Save and exit
+                </button>
 
-            <div className="mt-4 space-y-3">
-              <div>
-                <div className="text-xs opacity-70">Cover emoji (optional)</div>
-                <input
-                  className="mt-1 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
-                  value={coverEmoji}
-                  onChange={(e) => setCoverEmoji(e.target.value)}
-                  placeholder="😀"
-                />
-                <div className="mt-1 text-xs opacity-60">Tip: use a single emoji.</div>
-              </div>
-
-              <div>
-                <div className="text-xs opacity-70">Short description (optional)</div>
-                <textarea
-                  className="mt-1 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white min-h-[96px]"
-                  value={blurb}
-                  onChange={(e) => setBlurb(e.target.value)}
-                  placeholder="What is this project about?"
-                />
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-2">
-              <button
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={() => {
-                  if (!project) return;
-                  onSaveProject({
-                    ...project,
-                    publish: {
-                      coverEmoji: coverEmoji.trim() || undefined,
-                      blurb: blurb.trim() || undefined,
-                    },
-                  });
-                  setModal(null);
-                }}
-              >
-                Save settings
-              </button>
-
-              <button
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={() => setModal(null)}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* RENAME */}
-      {modal === "rename" && !isRO && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setModal(null)} />
-          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
-            <div className="font-semibold">Rename project</div>
-            <div className="mt-2 text-sm opacity-80">Change the title. It will persist in My projects.</div>
-
-            <input
-              className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white"
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              placeholder="Project title…"
-              autoFocus
-            />
-
-            <div className="mt-4 flex flex-col gap-2">
-              <button
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={() => {
-                  if (!project) return;
-                  const t = renameValue.trim();
-                  if (!t) return;
-                  onSaveProject({ ...project, title: t });
-                  setModal(null);
-                  setRenameValue("");
-                }}
-              >
-                Save
-              </button>
-
-              <button
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={() => {
-                  setModal(null);
-                  setRenameValue("");
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* EXIT */}
-      {modal === "exit" && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={() => setModal(null)} />
-          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
-            <div className="font-semibold">Leave this world?</div>
-            <div className="mt-2 text-sm opacity-80">{isRO ? "Exit preview." : "Choose: save, delete, or stay."}</div>
-
-            <div className="mt-4 flex flex-col gap-2">
-              <button
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={() => {
-                  setModal(null);
-                  onExitToHome();
-                }}
-              >
-                {isRO ? "Exit" : "Save and exit"}
-              </button>
-
-              {!isRO && (
                 <button
                   className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
                   onClick={() => {
                     onDeleteActiveProject();
-                    setModal(null);
+                    setShowExit(false);
                     onExitToHome();
                   }}
                 >
                   Delete and start over
                 </button>
-              )}
 
-              <button
-                className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                onClick={() => setModal(null)}
-              >
-                Cancel
-              </button>
+                <button
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                  onClick={() => setShowExit(false)}
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
