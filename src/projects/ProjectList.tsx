@@ -566,7 +566,33 @@ export default function ProjectList({
             }}
           />
 
-          <button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => fileRef.current?.click()}>
+          <input
+            ref={backupRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.currentTarget.value = "";
+              if (!f) return;
+              try {
+                const text = await f.text();
+                const raw = JSON.parse(text);
+
+                const res: any = importBackup(raw);
+                if (res && res.ok === false) {
+                  alert(`Restore failed: ${res.reason ?? "unknown"}`);
+                  return;
+                }
+
+                alert("Restore OK. Reloading…");
+                window.location.reload();
+              } catch {
+                alert("Restore failed: invalid file");
+              }
+            }}
+          />
+<button className="rounded-xl border border-white/10 bg-white/5 px-3 py-2" onClick={() => fileRef.current?.click()}>
             Import file
           </button>
 
@@ -790,6 +816,37 @@ export default function ProjectList({
             <input className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white" value={importCodeValue} onChange={(e) => setImportCodeValue(e.target.value)} placeholder="ABCD-EFGH" autoFocus />
             <div className="mt-4 flex flex-col gap-2">
               <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={importFromCode}>Import</button>
+
+          <button
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+            onClick={() => {
+              const b: any = exportBackup();
+              const created = b?.createdAt ?? Date.now();
+              const iso = new Date(created).toISOString().replace(/[:.]/g, "-");
+              const name = `iai_backup_${iso}.json`;
+
+              const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = name;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(url);
+            }}
+            title="Export ALL projects + UiPrefs"
+          >
+            Backup
+          </button>
+
+          <button
+            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
+            onClick={() => backupRef.current?.click()}
+            title="Restore ALL projects + UiPrefs"
+          >
+            Restore
+          </button>
               <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={closeModal}>Cancel</button>
             </div>
           </div>
