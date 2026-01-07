@@ -575,9 +575,18 @@ export default function ProjectList({
               const f = e.target.files?.[0];
               e.currentTarget.value = "";
               if (!f) return;
+
               try {
                 const text = await f.text();
-                const raw = JSON.parse(text);
+                const raw: any = JSON.parse(text);
+
+                const incomingCount = Array.isArray(raw?.projects) ? raw.projects.length : 0;
+                const hasPrefs = raw && typeof raw === "object" && ("uiPrefsRaw" in raw);
+
+                const ok = window.confirm(
+                  `Restore backup?\n\nThis overwrites current local data.\n\nCurrent projects: ${projects.length}\nIncoming projects: ${incomingCount}\nUiPrefs included: ${hasPrefs ? "yes" : "no"}\n\nProceed?`
+                );
+                if (!ok) return;
 
                 const res: any = importBackup(raw);
                 if (res && res.ok === false) {
