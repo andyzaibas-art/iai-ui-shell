@@ -5,17 +5,19 @@ import NotSureFlow from "../worlds/not_sure/NotSureFlow";
 import WritingFlow from "../worlds/writing/WritingFlow";
 import ComingSoon from "../worlds/common/ComingSoon";
 
-import { Project } from "../projects/ProjectStore";
+import type { Project } from "../projects/ProjectStore";
 
 import { PlannerState, newPlannerState } from "../worlds/planner/plannerModel";
 import { GameState, newGameState } from "../worlds/game/gameModel";
 import { NotSureState, newNotSureState } from "../worlds/not_sure/notSureModel";
 import { WritingState, newWritingState } from "../worlds/writing/writingModel";
-import { WorldId } from "../app/modes";
+import type { WorldId } from "../app/modes";
 import { WORLD_CATALOG } from "../app/worldCatalog";
 
 function downloadJson(filename: string, data: unknown) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -30,6 +32,8 @@ export default function WorldShell({
   worldId,
   projectId,
   project,
+  readOnly,
+  onCopyProject,
   onSaveProject,
   onExitToHome,
   onDeleteActiveProject,
@@ -38,18 +42,23 @@ export default function WorldShell({
   worldId: WorldId;
   projectId?: string;
   project?: Project;
+
+  // NEW: AppRoot perduoda šituos
+  readOnly?: boolean;
+  onCopyProject?: (id: string) => void;
+
   onSaveProject: (p: Project) => void;
   onExitToHome: () => void;
   onDeleteActiveProject: () => void;
   onSwitchWorld: (worldId: WorldId) => void;
 }) {
   const [showExit, setShowExit] = useState(false);
+  const isReadOnly = Boolean(readOnly);
 
   const plannerState: PlannerState =
     (project?.state?.planner as PlannerState) ?? newPlannerState();
 
-  const gameState: GameState =
-    (project?.state?.game as GameState) ?? newGameState();
+  const gameState: GameState = (project?.state?.game as GameState) ?? newGameState();
 
   const notSureState: NotSureState =
     (project?.state?.not_sure as NotSureState) ?? newNotSureState();
@@ -68,6 +77,7 @@ export default function WorldShell({
         <PlannerFlow
           value={plannerState}
           onChange={(next) => {
+            if (isReadOnly) return;
             if (!project) return;
             onSaveProject({ ...project, state: { ...project.state, planner: next } });
           }}
@@ -80,6 +90,7 @@ export default function WorldShell({
         <GameFlow
           value={gameState}
           onChange={(next) => {
+            if (isReadOnly) return;
             if (!project) return;
             onSaveProject({ ...project, state: { ...project.state, game: next } });
           }}
@@ -92,6 +103,7 @@ export default function WorldShell({
         <NotSureFlow
           value={notSureState}
           onChange={(next) => {
+            if (isReadOnly) return;
             if (!project) return;
             onSaveProject({ ...project, state: { ...project.state, not_sure: next } });
           }}
@@ -105,6 +117,7 @@ export default function WorldShell({
         <WritingFlow
           value={writingState}
           onChange={(next) => {
+            if (isReadOnly) return;
             if (!project) return;
             onSaveProject({ ...project, state: { ...project.state, writing: next } });
           }}
@@ -145,6 +158,9 @@ export default function WorldShell({
     );
   }
 
+  const canCopy = Boolean(onCopyProject && (project?.id || projectId));
+  const copyId = project?.id ?? projectId ?? "";
+
   return (
     <div className="h-full flex flex-col">
       <div className="p-4 flex items-center justify-between border-b border-white/10 bg-black/40">
@@ -152,10 +168,27 @@ export default function WorldShell({
           <div className="font-semibold truncate">{title}</div>
           <div className="text-xs opacity-60 truncate">
             {projectId ? `Project: ${projectId}` : "No project id"}
+            {isReadOnly ? " · Read-only" : ""}
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {isReadOnly && (
+            <button
+              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 disabled:opacity-50"
+              disabled={!canCopy}
+              onClick={() => {
+                if (!onCopyProject) return;
+                if (!copyId) return;
+                onCopyProject(copyId);
+              }}
+              title="Make an editable copy"
+              aria-label="Make copy"
+            >
+              Copy
+            </button>
+          )}
+
           <button
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 disabled:opacity-50"
             onClick={() => {
@@ -186,12 +219,10 @@ export default function WorldShell({
 
       {showExit && (
         <div className="fixed inset-0 z-50">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/85 backdrop-blur-sm"
             onClick={() => setShowExit(false)}
           />
-          {/* Dialog */}
           <div className="relative h-full flex items-end sm:items-center justify-center p-4">
             <div
               role="dialog"
@@ -200,7 +231,9 @@ export default function WorldShell({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="font-semibold">Leave this world?</div>
-              <div className="mt-2 text-sm opacity-80">Choose: save, delete, or stay.</div>
+              <div className="mt-2 text-sm opacity-80">
+                Choose: {isReadOnly ? "exit" : "save, delete, or stay"}.
+              </div>
 
               <div className="mt-4 flex flex-col gap-2">
                 <button
@@ -210,19 +243,21 @@ export default function WorldShell({
                     onExitToHome();
                   }}
                 >
-                  Save and exit
+                  {isReadOnly ? "Exit" : "Save and exit"}
                 </button>
 
-                <button
-                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
-                  onClick={() => {
-                    onDeleteActiveProject();
-                    setShowExit(false);
-                    onExitToHome();
-                  }}
-                >
-                  Delete and start over
-                </button>
+                {!isReadOnly && (
+                  <button
+                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
+                    onClick={() => {
+                      onDeleteActiveProject();
+                      setShowExit(false);
+                      onExitToHome();
+                    }}
+                  >
+                    Delete and start over
+                  </button>
+                )}
 
                 <button
                   className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left"
