@@ -889,6 +889,16 @@ export default function ProjectList({
             className="rounded-xl border border-white/10 bg-white/5 px-3 py-2"
             onClick={() => {
               const b: any = exportBackup();
+              const __ts = Date.now();
+              try {
+                localStorage.setItem("iai_ui_last_backup_at_v1", String(__ts));
+                localStorage.removeItem("iai_ui_backup_snooze_until_v1");
+              } catch {
+                // ignore
+              }
+              setLastBackupAt(__ts);
+              setBackupSnoozeUntil(0);
+
               const created = b?.createdAt ?? Date.now();
               const iso = new Date(created).toISOString().replace(/[:.]/g, "-");
               const name = `iai_backup_${iso}.json`;
