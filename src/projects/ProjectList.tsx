@@ -382,6 +382,38 @@ export default function ProjectList({
 
   const [toast, setToast] = useState<Toast>(null);
 
+  // Backup reminder (local-only)
+  const [lastBackupAt, setLastBackupAt] = useState<number | null>(() => {
+    try {
+      const v = localStorage.getItem("iai_ui_last_backup_at_v1");
+      const n = v ? Number(v) : NaN;
+      return Number.isFinite(n) ? n : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [backupSnoozeUntil, setBackupSnoozeUntil] = useState<number>(() => {
+    try {
+      const v = localStorage.getItem("iai_ui_backup_snooze_until_v1");
+      const n = v ? Number(v) : 0;
+      return Number.isFinite(n) ? n : 0;
+    } catch {
+      return 0;
+    }
+  });
+
+  const daysSinceBackup =
+    lastBackupAt != null ? Math.floor((Date.now() - lastBackupAt) / 86400000) : null;
+
+  const snoozed = backupSnoozeUntil > Date.now();
+
+  const showBackupBanner =
+    !snoozed &&
+    (projects.length >= 10 ||
+      (projects.length >= 3 && (lastBackupAt === null || (daysSinceBackup ?? 0) >= 7)));
+
+
   const [q, setQ] = useState(() => ui.projectsQuery ?? "");
   const [worldFilter, setWorldFilter] = useState<WorldFilter>(() => (ui.projectsWorldFilter as WorldFilter) ?? "all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => (ui.projectsStatusFilter as StatusFilter) ?? "all");
@@ -617,7 +649,34 @@ export default function ProjectList({
             Home
           </button>
         </div>
-      </div>
+      
+      {showBackupBanner && (
+        <div className="px-4 py-3 border-b border-white/10 bg-white/5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="text-sm text-white/80">
+              Backup recommended{lastBackupAt ? ` (last: ${daysSinceBackup ?? 0}d ago)` : ""}. This saves all projects + UI prefs.
+            </div>
+            <div className="flex gap-2">
+              <button
+                className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                onClick={() => {
+                  const until = Date.now() + 24 * 60 * 60 * 1000;
+                  try {
+                    localStorage.setItem("iai_ui_backup_snooze_until_v1", String(until));
+                  } catch {
+                    // ignore
+                  }
+                  setBackupSnoozeUntil(until);
+                }}
+                title="Hide for 24h"
+              >
+                Hide
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+</div>
 
       <div className="p-4 border-b border-white/10 bg-black/20">
         <div className="flex flex-col lg:flex-row gap-2">
