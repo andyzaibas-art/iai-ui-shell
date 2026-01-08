@@ -13,6 +13,7 @@ import {
   setProjectsQuery,
   type GallerySort,
 } from "../app/stores/UiPrefsStore";
+import Modal from "../app/ui/Modal";
 
 function fmt(ts: number) {
   try {
@@ -581,7 +582,7 @@ export default function ProjectList({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="p-4 flex items-center justify-between border-b border-white/10 bg-black/40">
+      <div className="p-4 flex items-center justify-between border-b border-white/10 bg-black">
         <div className="font-semibold">My projects</div>
 
         <div className="flex items-center gap-2 flex-wrap justify-end">
@@ -651,14 +652,14 @@ export default function ProjectList({
         </div>
       
       {showBackupBanner && (
-        <div className="px-4 py-3 border-b border-white/10 bg-white/5">
+        <div className="px-4 py-3 border-b border-white/10 bg-black">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="text-sm text-white/80">
               Backup recommended{lastBackupAt ? ` (last: ${daysSinceBackup ?? 0}d ago)` : ""}. This saves all projects + UI prefs.
             </div>
             <div className="flex gap-2">
               <button
-                className="rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm"
+                className="rounded-xl border border-white/10 bg-black px-3 py-2 text-sm"
                 onClick={() => {
                   const until = Date.now() + 24 * 60 * 60 * 1000;
                   try {
@@ -678,7 +679,7 @@ export default function ProjectList({
       )}
 </div>
 
-      <div className="p-4 border-b border-white/10 bg-black/20">
+      <div className="p-4 border-b border-white/10 bg-black">
         <div className="flex flex-col lg:flex-row gap-2">
           <input className="flex-1 rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white" value={q} onChange={(e) => {
               const v = e.target.value;
@@ -825,9 +826,9 @@ export default function ProjectList({
       </div>
 
       {modal?.kind === "preview" && previewProject && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative w-full max-w-3xl rounded-2xl border border-white/10 bg-black p-4 text-white">
+                <Modal open={true} onClose={closeModal}>
+
+<div className="relative w-full max-w-3xl rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="font-semibold truncate">{previewProject.title}</div>
@@ -872,13 +873,13 @@ export default function ProjectList({
               </div>
             )}
           </div>
-        </div>
+                </Modal>
       )}
 
       {modal?.kind === "import_code" && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
+                <Modal open={true} onClose={closeModal}>
+
+<div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Import from code</div>
             <div className="mt-2 text-sm opacity-80">Local-only: works in same browser profile.</div>
             <input className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white" value={importCodeValue} onChange={(e) => setImportCodeValue(e.target.value)} placeholder="ABCD-EFGH" autoFocus />
@@ -928,13 +929,13 @@ export default function ProjectList({
               <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={closeModal}>Cancel</button>
             </div>
           </div>
-        </div>
+                </Modal>
       )}
 
       {modal?.kind === "import_string" && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
+                <Modal open={true} onClose={closeModal}>
+
+<div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Import share string</div>
             <div className="mt-2 text-sm opacity-80">Paste `IAI1:` or `IAI2:` string (IAI2 is shorter).</div>
             <textarea className="mt-4 w-full rounded-xl border border-white/15 bg-black/30 px-4 py-3 text-white min-h-[140px]" value={importStringValue} onChange={(e) => setImportStringValue(e.target.value)} placeholder="IAI2:..." autoFocus />
@@ -943,13 +944,13 @@ export default function ProjectList({
               <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={closeModal}>Cancel</button>
             </div>
           </div>
-        </div>
+                </Modal>
       )}
 
       {modal?.kind === "delete" && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" onClick={closeModal} />
-          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
+                <Modal open={true} onClose={closeModal}>
+
+<div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-black p-4 text-white">
             <div className="font-semibold">Delete project?</div>
             <div className="mt-2 text-sm opacity-80">This will permanently remove <span className="font-semibold">{deleteProject?.title ?? "this project"}</span>.</div>
             <div className="mt-4 flex flex-col gap-2">
@@ -957,7 +958,7 @@ export default function ProjectList({
               <button className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left" onClick={closeModal}>Cancel</button>
             </div>
           </div>
-        </div>
+                </Modal>
       )}
 
       {toast && (
