@@ -1,27 +1,34 @@
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 
 export default function HelpPage() {
   return (
-    <div className="page">
-      <div className="card">
-        <div className="cardHeader">
-          <h2>Help</h2>
-          <p className="muted">This is a minimal UI shell. No backend calls.</p>
-        </div>
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-4xl px-4 py-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Help</CardTitle>
+            <CardDescription>Quick FAQ.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <details className="rounded-xl border border-neutral-800 bg-neutral-900/20 p-4">
+              <summary className="cursor-pointer text-sm font-medium text-neutral-100">
+                What is I•A•I UI Shell?
+              </summary>
+              <div className="mt-2 text-sm text-neutral-300">
+                This is a frontend shell to prototype the experience before backend integration.
+              </div>
+            </details>
 
-        <div className="stack">
-          <div>
-            <h3>Keyboard</h3>
-            <ul className="list">
-              <li><span className="kbd">Enter</span> send message (Chat)</li>
-              <li><span className="kbd">Shift</span>+<span className="kbd">Enter</span> newline (Chat)</li>
-            </ul>
-          </div>
-
-          <div>
-            <h3>Local-only saves</h3>
-            <p className="muted">Write drafts are stored in your browser (localStorage). Use History to review.</p>
-          </div>
-        </div>
+            <details className="rounded-xl border border-neutral-800 bg-neutral-900/20 p-4">
+              <summary className="cursor-pointer text-sm font-medium text-neutral-100">
+                Where is my data stored?
+              </summary>
+              <div className="mt-2 text-sm text-neutral-300">
+                Write/History uses localStorage (browser local-only).
+              </div>
+            </details>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

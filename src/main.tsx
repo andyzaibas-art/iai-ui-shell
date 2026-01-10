@@ -1,10 +1,12 @@
-import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import "./styles/index.css";
+import "./index.css";
+import { initEditor } from "./hooks/useEditor";
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+if (import.meta.env.DEV || document.referrer?.includes("caffeine.ai")) {
+  try {
+    initEditor();
+  } catch {}
+}
+
+ReactDOM.createRoot(document.getElementById("root")!).render(<App />);

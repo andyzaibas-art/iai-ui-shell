@@ -1,52 +1,93 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { Search } from "lucide-react";
+import { Button } from "../components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Input } from "../components/ui/input";
 
-const demoDocs = [
-  { title: 'How to create travel commands', snippet: 'Define quick actions like “Find flights” and ask clarifying questions…' },
-  { title: 'Rules template', snippet: 'Keep instructions deterministic: only do what the command says…' },
-  { title: 'Local storage note', snippet: 'This UI shell stores data locally only.' }
-];
+interface SearchResult {
+  id: string;
+  title: string;
+  excerpt: string;
+  type: string;
+  date: string;
+}
 
 export default function SearchPage() {
-  const [q, setQ] = useState('');
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResult[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
 
-  const results = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return demoDocs;
-    return demoDocs.filter(
-      (d) => d.title.toLowerCase().includes(s) || d.snippet.toLowerCase().includes(s)
-    );
-  }, [q]);
+  const handleSearch = () => {
+    if (!query.trim()) return;
+    setHasSearched(true);
+    setResults([
+      {
+        id: "1",
+        title: "Sample Document 1",
+        excerpt:
+          "Placeholder search result. Real search will be added later.",
+        type: "Article",
+        date: new Date().toLocaleDateString(),
+      },
+      {
+        id: "2",
+        title: "Sample Document 2",
+        excerpt: "Another placeholder result for UI demo.",
+        type: "Note",
+        date: new Date().toLocaleDateString(),
+      },
+    ]);
+  };
 
   return (
-    <div className="page">
-      <div className="card">
-        <div className="cardHeader">
-          <h2>Search</h2>
-          <p className="muted">Demo search (local, static data).</p>
-        </div>
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-4xl px-4 py-8 space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Search</CardTitle>
+            <CardDescription>Dummy results for now.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSearch();
+              }}
+              className="flex gap-2"
+            >
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Enter search query..."
+              />
+              <Button type="submit" className="gap-2">
+                <Search className="h-4 w-4" />
+                Search
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
-        <div className="row">
-          <input
-            className="input"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search…"
-            aria-label="Search"
-          />
-          <button className="btn" type="button" onClick={() => setQ('')}>
-            Clear
-          </button>
-        </div>
-
-        <div className="list" style={{ marginTop: 14 }}>
-          {results.map((r) => (
-            <div key={r.title} className="listItem">
-              <div className="listTitle">{r.title}</div>
-              <div className="muted">{r.snippet}</div>
+        {hasSearched && results.length > 0 ? (
+          <div className="space-y-3">
+            <div className="text-sm text-neutral-400">
+              {results.length} results
             </div>
-          ))}
-          {results.length === 0 && <div className="muted">No results.</div>}
-        </div>
+            {results.map((r) => (
+              <Card key={r.id}>
+                <CardHeader>
+                  <CardTitle className="text-base">{r.title}</CardTitle>
+                  <CardDescription>{r.excerpt}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-xs text-neutral-500">
+                    {r.type} · {r.date}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );
