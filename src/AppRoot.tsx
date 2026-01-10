@@ -270,15 +270,15 @@ export default function AppRoot() {
           onEnterWorld={openWorldFromHome}
           onOpenProjects={openProjects}
           lastProject={lastProject}
-          onResumeProject={(id) => openProjectById(id, "home", false)}
+          onResumeProject={(id: string) => openProjectById(id, "home", false)}
         />
       )}
 
       {state.mode === "projects" && (
         <ProjectList
           projects={projects}
-          onOpenProject={(id) => openProjectById(id, "projects", false)}
-          onOpenProjectReadOnly={(id) => openProjectById(id, "projects", true)}
+          onOpenProject={(id: string) => openProjectById(id, "projects", false)}
+          onOpenProjectReadOnly={(id: string) => openProjectById(id, "projects", true)}
           onDeleteProject={(id) =>
             setProjects((prev) => prev.filter((p) => p.id !== id))
           }
